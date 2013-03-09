@@ -1,0 +1,29 @@
+module IMZML
+
+  module OBO
+
+    module MS
+
+      FLOAT_32_BIT = "MS:1000521"
+
+    end
+
+    module IMS
+
+      CONTINUOUS = "IMS:1000030"
+      PROCESSED = "IMS:1000031"
+      EXTERNAL_OFFSET = "IMS:1000102"
+      EXTERNAL_ENCODED_LENGTH = "IMS:1000104"
+      MAX_COUNT_OF_PIXELS_X = "IMS:1000042"
+      MAX_COUNT_OF_PIXELS_Y = "IMS:1000043"
+      PIXEL_SIZE = "IMS:1000046"
+      IMAGE_SHAPE = "IMS:1000047"
+      UNIVERSALLY_UNIQUE_IDENTIFIER = "IMS:1000080"
+
+    end
+
+    module UNIT
+    end
+  end
+
+end
