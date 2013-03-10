@@ -38,17 +38,31 @@ module IMZML
       max_normalized = data.max - data.min
       step = 255.0 / max_normalized
 
-      f = Magick::Image.new(@pixel_count_x, @pixel_count_y)
+      f = Magick::Image.new(@pixel_count_x * @pixel_size_x, @pixel_count_y * @pixel_size_y)
 
       p "Creating image"
       i = 0
       row = column = 0
       data.each do |value|
-        f.pixel_color(column, row, Magick::Pixel.from_hsla(0,0, step * (value - data.min)))
-        column += 1
-        if (column >= @pixel_count_y)
-          row += 1
-          column = 0
+        grey_value = step * (value - data.min)
+        pixel_color = Magick::Pixel.from_hsla(0,0, grey_value)
+
+
+        @pixel_size_x.times do
+
+          row_copy = row
+          @pixel_size_y.times do
+
+            f.pixel_color(column, row_copy, pixel_color)
+            row_copy += 1
+          end
+
+          column += 1
+          if (column >= @pixel_count_y * @pixel_size_y)
+            row += 1 * @pixel_size_y
+            column = 0
+          end
+
         end
       end
 
@@ -147,10 +161,10 @@ end
 if __FILE__ == $0
 
   # Working example
-  path = "../imzML/example_files/"
-  filename = "Example_Continuous"
-  # path = "../imzML/test_files/"
-  # filename = "testovaci_blbost"
+  path, filename, mz, interval = "../imzML/example_files/", "Example_Continuous", 151.9, 0.25
+  # path, filename, mz, interval = "../imzML/example_files/", "Example_Processed", 151.9, 0.25
+  # path, filename, mz, interval = "../imzML/test_files/", "testovaci_blbost", 320, 0.1
+  # path, filename, mz, interval = "../imzML/s043_processed/", "S043_Processed", 157.2, 0.25
   imzml_path = "#{path}#{filename}.imzML"
   ibd_path = "#{path}#{filename}.ibd"
 
@@ -162,11 +176,11 @@ if __FILE__ == $0
 
   # save spectrum to images
   # imzml.spectrums.each do |spectrum|
-  #   p spectrum.intensity(ibd_path, 151.9, 0.25)
-  #   spectrum.save_spectrum_graph(ibd_path)
+    # p spectrum.intensity(ibd_path, mz, interval)
+    # spectrum.save_spectrum_graph(ibd_path)
   # end
 
   # save image
-  imzml.save_image("image.png", ibd_path, 151.9, 0.25)
+  imzml.save_image("image.png", ibd_path, mz, interval)
 
 end

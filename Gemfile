@@ -1,3 +1,4 @@
 source "https://rubygems.org"
-gem "nokogiri"
-gem "gnuplot"
+gem 'nokogiri'
+gem 'gnuplot'
+gem 'rmagick'

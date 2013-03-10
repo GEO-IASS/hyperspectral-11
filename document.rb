@@ -24,6 +24,7 @@ module IMZML
     def end_element(name)
 
       case name
+      when "binaryDataArray" then @in_mz_array = @in_intensity_array = false
       when "spectrum"
         @in_spectrum = false
 
