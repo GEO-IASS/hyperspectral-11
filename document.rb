@@ -95,8 +95,8 @@ module IMZML
           case accession
           when IMZML::OBO::IMS::MAX_COUNT_OF_PIXELS_X then @metadata.pixel_count_x = value.to_i
           when IMZML::OBO::IMS::MAX_COUNT_OF_PIXELS_Y then @metadata.pixel_count_y = value.to_i
-          when IMZML::OBO::IMS::PIXEL_SIZE then @metadata.pixel_size_x = value.to_i
-          when IMZML::OBO::IMS::IMAGE_SHAPE then @metadata.pixel_size_y = value.to_i # FIXME probably error in obo definition file, should be pixel size y
+          when IMZML::OBO::IMS::PIXEL_SIZE then @metadata.pixel_size_x = 1 # FIXME not used properly value.to_i
+          when IMZML::OBO::IMS::IMAGE_SHAPE then @metadata.pixel_size_y = 1 # value.to_i # FIXME probably error in obo definition file, should be pixel size y
           end
 
         end

@@ -1,4 +1,4 @@
 source "https://rubygems.org"
 gem 'nokogiri'
 gem 'gnuplot'
-gem 'rmagick'
+gem 'chunky_png'

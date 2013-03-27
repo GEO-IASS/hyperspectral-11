@@ -2,7 +2,8 @@ require './document'
 require './parser'
 require './obo'
 require 'gnuplot'
-require 'rmagick'
+require 'chunky_png'
+require 'perftools'
 
 module IMZML
 
@@ -26,47 +27,60 @@ module IMZML
 
     end
 
+    def generate_image(filename, data_path, mz_value, interval)
 
-    def save_image(image_name, data_path, mz_value, interval)
+      print "\nFinding intensities ... "
 
-      p "Finding intensities"
+      start = Time.now
       data = Array.new
-      @spectrums.each do |spectrum|
-        data << spectrum.intensity(data_path, mz_value, interval)
+      PerfTools::CpuProfiler.start("/tmp/finding_intensities") do
+        @spectrums.each do |spectrum|
+          data << spectrum.intensity(data_path, mz_value, interval)
+        end
       end
+      print "#{Time.now - start}s"
 
+      print "\nNormalizing data ... "
+      start = Time.now
       max_normalized = data.max - data.min
+      min = data.min
       step = 255.0 / max_normalized
+      print "#{Time.now - start}s"
 
-      f = Magick::Image.new(@pixel_count_x * @pixel_size_x, @pixel_count_y * @pixel_size_y)
+      # f = Magick::Image.new(@pixel_count_x * @pixel_size_x, @pixel_count_y * @pixel_size_y)
+      f = ChunkyPNG::Image.new(@pixel_count_x, @pixel_count_y)
 
-      p "Creating image"
-      i = 0
-      row = column = 0
+      start = Time.now
+      print "\nCreating image #{@pixel_count_x}x#{@pixel_count_y} ... "
+
+      # PerfTools::CpuProfiler.start("/tmp/creating_image") do
+
+      # p data.size
+      row, column, i = 0, 0, 0
+      direction_right = true
       data.each do |value|
-        grey_value = step * (value - data.min)
-        pixel_color = Magick::Pixel.from_hsla(0,0, grey_value)
+        # p value
+        # p "#{column}, #{row}"
+        color_value = step * (value - min)
+        f[column, row] = ChunkyPNG::Color.grayscale(color_value.to_i)
+        # f.pixel_color(column, row, Magick::Pixel.from_hsla(0,0, ))
+        direction_right ? column += 1 : column -= 1
 
+        if (column >= @pixel_count_x || column < 0)
+          row += 1
 
-        @pixel_size_x.times do
-
-          row_copy = row
-          @pixel_size_y.times do
-
-            f.pixel_color(column, row_copy, pixel_color)
-            row_copy += 1
-          end
-
-          column += 1
-          if (column >= @pixel_count_y * @pixel_size_y)
-            row += 1 * @pixel_size_y
-            column = 0
-          end
-
+          direction_right = (row % 2 == 0)
+          direction_right ? column = 0 : column -= 1
+          # p "c:#{column}, r:#{row}, d:#{direction_right}"
         end
       end
 
-      f.write(image_name)
+      # end
+
+      print "#{Time.now - start}s"
+
+      filename ||= "image.png"
+      f.save("#{filename}.png", :interlace => true)
     end
 
   end
@@ -85,10 +99,22 @@ module IMZML
 
       low_value = search_binary(mz_array, at - interval)
       low_index = mz_array.index(low_value)
+
+      # sum = low_value
+      # i = 0
+      # high_mz_value = low_value
+      # # p "high #{high_mz_value} compare #{at + interval} from #{i} sum #{sum}"
+      # while high_mz_value < (at + interval)
+      #   high_mz_value = mz_array[low_index + i]
+      #   sum += high_mz_value
+      #   i += 1
+      # end
+      #
+      # p sum
+      # sum
+
       high_value = search_binary(mz_array, at + interval)
       high_index = mz_array.index(high_value)
-
-      # p "#{mz_array[low_index..high_index]} - #{intensity_array[low_index..high_index]}"
 
       intensity_array[low_index..high_index].inject{|sum, x| sum + x}
     end
@@ -161,18 +187,26 @@ end
 if __FILE__ == $0
 
   # Working example
-  path, filename, mz, interval = "../imzML/example_files/", "Example_Continuous", 151.9, 0.25
+  # path, filename, mz, interval = "../imzML/example_files/", "Example_Continuous", 151.9, 0.25
   # path, filename, mz, interval = "../imzML/example_files/", "Example_Processed", 151.9, 0.25
-  # path, filename, mz, interval = "../imzML/test_files/", "testovaci_blbost", 320, 0.1
-  # path, filename, mz, interval = "../imzML/s043_processed/", "S043_Processed", 157.2, 0.25
+  # path, filename, mz, interval = "../imzML/test_files/", "testovaci_blbost", 2568.0, 0.1
+  # path, filename, mz, interval = "../imzML/s042_continuous/", "S042_Continuous", 157.2, 0.25
+  # path, filename, mz, interval = "../imzML/s043_processed/", "S043_Processed", 152.9, 0.5
+  # path, filename, mz, interval = "../imzML/test_files/", "20121220_LIN_100x100_1mmScan_PAPER_0018_spot5_1855", 2561.5, 5.6
+  path, filename, mz, interval = "../imzML/test_files/", "20130115_lin_range_10row_100vdef_0V_DOBRA_144327", 2533.3, 3.6
   imzml_path = "#{path}#{filename}.imzML"
   ibd_path = "#{path}#{filename}.ibd"
 
+  start = Time.now
+  print "Parsing imzML file \"#{filename}.imzML\" ... "
   doc = IMZML::Document.new
   parser = IMZML::Parser.new(doc)
   parser.parse_file(imzml_path)
+  print "#{Time.now - start}s"
   imzml = doc.metadata
-  p "Checksum equals" if IO.binread(ibd_path, 16).unpack("H*").first.upcase == imzml.uuid.upcase
+
+  # TODO create some tests
+  # print "\nPASS checksum equals" if IO.binread(ibd_path, 16).unpack("H*").first.upcase == imzml.uuid.upcase
 
   # save spectrum to images
   # imzml.spectrums.each do |spectrum|
@@ -181,6 +215,8 @@ if __FILE__ == $0
   # end
 
   # save image
-  imzml.save_image("image.png", ibd_path, mz, interval)
+  imzml.generate_image(filename, ibd_path, mz, interval)
+
+  print "\n"
 
 end
