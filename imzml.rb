@@ -1,6 +1,5 @@
-require './document'
-require './parser'
 require './obo'
+require './ox'
 require 'gnuplot'
 require 'chunky_png'
 require 'perftools'
@@ -33,11 +32,11 @@ module IMZML
 
       start = Time.now
       data = Array.new
-      PerfTools::CpuProfiler.start("/tmp/finding_intensities") do
+      # PerfTools::CpuProfiler.start("/tmp/finding_intensities") do
         @spectrums.each do |spectrum|
           data << spectrum.intensity(data_path, mz_value, interval)
         end
-      end
+      # end
       print "#{Time.now - start}s"
 
       print "\nNormalizing data ... "
@@ -47,7 +46,6 @@ module IMZML
       step = 255.0 / max_normalized
       print "#{Time.now - start}s"
 
-      # f = Magick::Image.new(@pixel_count_x * @pixel_size_x, @pixel_count_y * @pixel_size_y)
       f = ChunkyPNG::Image.new(@pixel_count_x, @pixel_count_y)
 
       start = Time.now
@@ -191,19 +189,32 @@ if __FILE__ == $0
   # path, filename, mz, interval = "../imzML/example_files/", "Example_Processed", 151.9, 0.25
   # path, filename, mz, interval = "../imzML/test_files/", "testovaci_blbost", 2568.0, 0.1
   # path, filename, mz, interval = "../imzML/s042_continuous/", "S042_Continuous", 157.2, 0.25
-  # path, filename, mz, interval = "../imzML/s043_processed/", "S043_Processed", 152.9, 0.5
+  path, filename, mz, interval = "../imzML/s043_processed/", "S043_Processed", 152.9, 0.5
   # path, filename, mz, interval = "../imzML/test_files/", "20121220_LIN_100x100_1mmScan_PAPER_0018_spot5_1855", 2561.5, 5.6
-  path, filename, mz, interval = "../imzML/test_files/", "20130115_lin_range_10row_100vdef_0V_DOBRA_144327", 2533.3, 3.6
+  # path, filename, mz, interval = "../imzML/test_files/", "20130115_lin_range_10row_100vdef_0V_DOBRA_144327", 2533.3, 3.6
   imzml_path = "#{path}#{filename}.imzML"
   ibd_path = "#{path}#{filename}.ibd"
 
+  # parse with Nokogiri
+  # start = Time.now
+  # print "Parsing imzML file \"#{filename}.imzML\" with Nokogiri ... "
+  # doc = IMZML::Document.new
+  # parser = IMZML::Parser.new(doc)
+  # parser.parse_file(imzml_path)
+  # imzml = doc.metadata
+  # print "#{Time.now - start}s"
+
+  # parse with Ox
   start = Time.now
-  print "Parsing imzML file \"#{filename}.imzML\" ... "
-  doc = IMZML::Document.new
-  parser = IMZML::Parser.new(doc)
-  parser.parse_file(imzml_path)
+  print "Parsing imzML file \"#{filename}.imzML\" with Ox ... "
+  any = ImzMLParser.new()
+  # PerfTools::CpuProfiler.start("/tmp/ox") do
+  File.open(imzml_path, 'r') do |f|
+    Ox.sax_parse(any, f)
+  # end
+  end
+  imzml = any.metadata
   print "#{Time.now - start}s"
-  imzml = doc.metadata
 
   # TODO create some tests
   # print "\nPASS checksum equals" if IO.binread(ibd_path, 16).unpack("H*").first.upcase == imzml.uuid.upcase
