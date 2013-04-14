@@ -53,7 +53,6 @@ module IMZML
 
       # PerfTools::CpuProfiler.start("/tmp/creating_image") do
 
-      # p data.size
       row, column, i = 0, 0, 0
       direction_right = true
       data.each do |value|
@@ -61,15 +60,14 @@ module IMZML
         # p "#{column}, #{row}"
         color_value = step * (value - min)
         f[column, row] = ChunkyPNG::Color.grayscale(color_value.to_i)
-        # f.pixel_color(column, row, Magick::Pixel.from_hsla(0,0, ))
         direction_right ? column += 1 : column -= 1
 
         if (column >= @pixel_count_x || column < 0)
           row += 1
 
           direction_right = (row % 2 == 0)
+          # direction_right = true
           direction_right ? column = 0 : column -= 1
-          # p "c:#{column}, r:#{row}, d:#{direction_right}"
         end
       end
 
@@ -98,10 +96,12 @@ module IMZML
       low_value = search_binary(mz_array, at - interval)
       low_index = mz_array.index(low_value)
 
-      # sum = low_value
-      # i = 0
-      # high_mz_value = low_value
-      # # p "high #{high_mz_value} compare #{at + interval} from #{i} sum #{sum}"
+      sum = low_value
+      i = 0
+      high_mz_value = low_value
+
+      # try to find high value by adding, not with binary search
+      # p "high #{high_mz_value} compare #{at + interval} from #{i} sum #{sum}"
       # while high_mz_value < (at + interval)
       #   high_mz_value = mz_array[low_index + i]
       #   sum += high_mz_value
@@ -115,31 +115,6 @@ module IMZML
       high_index = mz_array.index(high_value)
 
       intensity_array[low_index..high_index].inject{|sum, x| sum + x}
-    end
-
-    def search_binary(array, value, first = true)
-
-      if (array.size > 2)
-        middle_index = array.size/2
-        middle = array[middle_index]
-
-        if (middle > value)
-          search_binary(array[0..middle_index], value, first)
-        else
-          search_binary(array[middle_index..array.size], value, first)
-        end
-      else
-        if first
-          array.first
-        else
-          array.last
-        end
-      end
-
-    end
-
-    def search_last(array, value)
-
     end
 
     def mz_array(data_path)
@@ -177,6 +152,31 @@ module IMZML
 
     end
 
+    def search_binary(array, value, first = true)
+
+      if (array.size > 2)
+        middle_index = array.size/2
+        middle = array[middle_index]
+
+        if (middle > value)
+          search_binary(array[0..middle_index], value, first)
+        else
+          search_binary(array[middle_index..array.size], value, first)
+        end
+      else
+        if first
+          array.first
+        else
+          array.last
+        end
+      end
+
+    end
+
+    def search_last(array, value)
+
+    end
+
   end
 
 end
@@ -187,22 +187,13 @@ if __FILE__ == $0
   # Working example
   # path, filename, mz, interval = "../imzML/example_files/", "Example_Continuous", 151.9, 0.25
   # path, filename, mz, interval = "../imzML/example_files/", "Example_Processed", 151.9, 0.25
-  # path, filename, mz, interval = "../imzML/test_files/", "testovaci_blbost", 2568.0, 0.1
+  path, filename, mz, interval = "../imzML/test_files/", "testovaci_blbost", 2568.0, 0.1
   # path, filename, mz, interval = "../imzML/s042_continuous/", "S042_Continuous", 157.2, 0.25
-  path, filename, mz, interval = "../imzML/s043_processed/", "S043_Processed", 152.9, 0.5
+  # path, filename, mz, interval = "../imzML/s043_processed/", "S043_Processed", 152.9, 0.5
   # path, filename, mz, interval = "../imzML/test_files/", "20121220_LIN_100x100_1mmScan_PAPER_0018_spot5_1855", 2561.5, 5.6
   # path, filename, mz, interval = "../imzML/test_files/", "20130115_lin_range_10row_100vdef_0V_DOBRA_144327", 2533.3, 3.6
   imzml_path = "#{path}#{filename}.imzML"
   ibd_path = "#{path}#{filename}.ibd"
-
-  # parse with Nokogiri
-  # start = Time.now
-  # print "Parsing imzML file \"#{filename}.imzML\" with Nokogiri ... "
-  # doc = IMZML::Document.new
-  # parser = IMZML::Parser.new(doc)
-  # parser.parse_file(imzml_path)
-  # imzml = doc.metadata
-  # print "#{Time.now - start}s"
 
   # parse with Ox
   start = Time.now
@@ -211,8 +202,8 @@ if __FILE__ == $0
   # PerfTools::CpuProfiler.start("/tmp/ox") do
   File.open(imzml_path, 'r') do |f|
     Ox.sax_parse(any, f)
-  # end
   end
+  #end
   imzml = any.metadata
   print "#{Time.now - start}s"
 
@@ -220,10 +211,7 @@ if __FILE__ == $0
   # print "\nPASS checksum equals" if IO.binread(ibd_path, 16).unpack("H*").first.upcase == imzml.uuid.upcase
 
   # save spectrum to images
-  # imzml.spectrums.each do |spectrum|
-    # p spectrum.intensity(ibd_path, mz, interval)
-    # spectrum.save_spectrum_graph(ibd_path)
-  # end
+  imzml.spectrums.each{|spectrum| spectrum.save_spectrum_graph(ibd_path)}
 
   # save image
   imzml.generate_image(filename, ibd_path, mz, interval)
