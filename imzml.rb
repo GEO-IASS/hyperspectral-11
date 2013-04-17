@@ -28,7 +28,7 @@ module IMZML
 
     def image_data(data_path, mz_value, interval)
 
-      print "\nFinding intensities ... "
+      print "Finding intensities ... "
 
       start = Time.now
       data = Array.new
@@ -76,7 +76,7 @@ module IMZML
 
     def generate_image(filename, data_path, mz_value, interval)
 
-      print "\nFinding intensities ... "
+      print "Finding intensities ... "
 
       start = Time.now
       data = Array.new
