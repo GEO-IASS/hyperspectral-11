@@ -2,14 +2,16 @@ require 'rubygems'
 require 'fox16'
 require 'fox16/colors'
 require './imzml'
-require './image_view'
 
 include Fox
 
 class Reader < FXMainWindow
 
+  IMAGE_WIDTH = 300
+  IMAGE_HEIGHT = 300
+
   def initialize(app)
-    super(app, "imzML Reader", :width => 1024, :height => 500)
+    super(app, "imzML Reader", :width => 1024, :height => 600)
     add_menu_bar
 
     @imzml = nil
@@ -19,8 +21,9 @@ class Reader < FXMainWindow
     vertical_frame = FXVerticalFrame.new(self, :opts => LAYOUT_FILL)
     top_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X)
 
-    @hyperspectral_image = ImageView.new(top_horizontal_frame)
-    @hyperspectral_image.load_image("image.png")
+    image_container = FXPacker.new(top_horizontal_frame, :opts => FRAME_SUNKEN|LAYOUT_FIX_WIDTH|LAYOUT_FIX_HEIGHT, :width => IMAGE_WIDTH, :height => IMAGE_HEIGHT)
+    @hyperspectral_image = FXImageView.new(image_container, nil, :opts => LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL)
+    @image_canvas = FXCanvas.new(top_horizontal_frame)
 
     # tab settings
     @tabbook = FXTabBook.new(top_horizontal_frame, :opts => LAYOUT_FILL_X|LAYOUT_RIGHT|LAYOUT_FILL_Y)
@@ -37,7 +40,7 @@ class Reader < FXMainWindow
     bottom_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
 
     @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
-    @spectrum_canvas.connect(SEL_PAINT, method(:spectrum_canvas_repaint))
+    @spectrum_canvas.connect(SEL_PAINT, method(:canvas_repaint))
 
     zoom_button_vertical_frame = FXVerticalFrame.new(bottom_horizontal_frame, :opts => LAYOUT_FIX_WIDTH|LAYOUT_FILL_Y, :width => 50)
 
@@ -93,7 +96,14 @@ class Reader < FXMainWindow
     end
 
     @imzml = imzml_parser.metadata
+    read_data
+    puts "Parsing done"
 
+    load_image(filepath.split("/").last.gsub(/imzML/,"png"))
+    @spectrum_canvas.update
+  end
+
+  def read_data
     # get spectrum min and max data
     @mz_array = @imzml.spectrums.first.mz_array(@datapath)
     @mz_min = @mz_array.first
@@ -101,13 +111,44 @@ class Reader < FXMainWindow
     @intensity_array = @imzml.spectrums.first.intensity_array(@datapath)
     @intensity_max = @intensity_array.max
     @intensity_min = @intensity_array.min
-
-    puts "Parsing done"
-
-    @spectrum_canvas.update
   end
 
-  def spectrum_canvas_repaint(sender, sel, event)
+  def image_data
+
+    data = @imzml.image_data(@datapath, 2568.0, 0.1)
+
+    # row, column, i = 0, 0, 0
+    # direction_right = true
+
+    max_normalized = data.max - data.min
+    min = data.min
+    step = 255.0 / max_normalized
+
+    data.map do |i|
+      value = (step * (i - min)).to_i
+      # puts "Color value for #{i} is (#{value}, #{value}, #{value})}"
+      FXRGB(value, value, value)
+    end
+
+    # data.each do |value|
+    #   # p value
+    #   # p "#{column}, #{row}"
+    #   color_value = step * (value - min)
+    #   f[column, row] = FXRGB(color_value.to_i, color_value.to_i, color_value.to_i)
+    #   direction_right ? column += 1 : column -= 1
+    #
+    #   if (column >= @pixel_count_x || column < 0)
+    #     row += 1
+    #
+    #     direction_right = (row % 2 == 0)
+    #     # direction_right = true
+    #     direction_right ? column = 0 : column -= 1
+    #   end
+    # end
+
+  end
+
+  def canvas_repaint(sender, sel, event)
     FXDCWindow.new(@spectrum_canvas, event) do |dc|
 
       # draw background
@@ -117,6 +158,7 @@ class Reader < FXMainWindow
       # draw axis
       dc.foreground = FXColor::Black
       axis_padding = 30
+      line_indicator_height = 5
 
       # x axis
       dc.drawLine(axis_padding, event.rect.h - axis_padding, event.rect.w - axis_padding, event.rect.h - axis_padding)
@@ -127,6 +169,7 @@ class Reader < FXMainWindow
       dc.font = @font
       dc.drawText(axis_padding/2, event.rect.h - axis_padding/2, "0")
 
+      # draw line only when sent event is correct
       if (@imzml && event.rect.w > axis_padding && event.rect.h > axis_padding)
 
         # axis dimensions
@@ -135,6 +178,12 @@ class Reader < FXMainWindow
         y_axis_height = event.rect.h - 2 * axis_padding
         y_point_size = y_axis_height / @intensity_max
         y_baseline = event.rect.h - axis_padding - 1
+
+        # draw number lines
+        dc.lineStyle = LINE_ONOFF_DASH
+        dc.drawLine(event.rect.w / 2, event.rect.h - axis_padding + line_indicator_height, event.rect.w/2, axis_padding + line_indicator_height)
+        # dc.drawLine(axis_padding - line_indicator_height, event.rect.h/2, event.rect.w - axis_padding, event.rect.h/2)
+        dc.lineStyle = LINE_SOLID
 
         # draw mz numbers
         dc.drawText(event.rect.w / 2, event.rect.h - axis_padding/2, (@mz_max/2).round(2).to_s)
@@ -153,6 +202,25 @@ class Reader < FXMainWindow
       end
     end
   end
+
+  def load_image(image_path)
+    # File.open(image_path, "rb") do |io|
+    image = FXImage.new(getApp(), nil, IMAGE_KEEP|IMAGE_SHMI|IMAGE_SHMP, :width => @imzml.pixel_count_x, :height => @imzml.pixel_count_y)
+
+    scale_w = IMAGE_WIDTH
+    scale_h = IMAGE_HEIGHT
+    if image.width > image.height
+      scale_h = image.height.to_f/image.width.to_f * IMAGE_HEIGHT
+    else
+      scale_w = image.width.to_f/image.height.to_f * IMAGE_WIDTH
+    end
+    image.pixels = image_data
+    image.scale(scale_w - 40, scale_h - 40)
+    image.create
+    @hyperspectral_image.image = image
+    @hyperspectral_image.update
+  end
+  # end
 
 end
 

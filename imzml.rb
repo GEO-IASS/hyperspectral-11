@@ -26,6 +26,54 @@ module IMZML
 
     end
 
+    def image_data(data_path, mz_value, interval)
+
+      print "\nFinding intensities ... "
+
+      start = Time.now
+      data = Array.new
+      # PerfTools::CpuProfiler.start("/tmp/finding_intensities") do
+        @spectrums.each do |spectrum|
+          data << spectrum.intensity(data_path, mz_value, interval)
+        end
+      # end
+      print "#{Time.now - start}s"
+
+      # start = Time.now
+#       max_normalized = data.max - data.min
+#       min = data.min
+#       step = 255.0 / max_normalized
+#
+      data
+
+      #
+      # f = ChunkyPNG::Image.new(@pixel_count_x, @pixel_count_y)
+      #
+      # start = Time.now
+      # print "\nCreating image #{@pixel_count_x}x#{@pixel_count_y} ... "
+      #
+      # # PerfTools::CpuProfiler.start("/tmp/creating_image") do
+      #
+      # row, column, i = 0, 0, 0
+      # direction_right = true
+      # data.each do |value|
+      #   # p value
+      #   # p "#{column}, #{row}"
+      #   color_value = step * (value - min)
+      #   f[column, row] = ChunkyPNG::Color.grayscale(color_value.to_i)
+      #   direction_right ? column += 1 : column -= 1
+      #
+      #   if (column >= @pixel_count_x || column < 0)
+      #     row += 1
+      #
+      #     direction_right = (row % 2 == 0)
+      #     # direction_right = true
+      #     direction_right ? column = 0 : column -= 1
+      #   end
+      # end
+      #
+    end
+
     def generate_image(filename, data_path, mz_value, interval)
 
       print "\nFinding intensities ... "
@@ -39,12 +87,10 @@ module IMZML
       # end
       print "#{Time.now - start}s"
 
-      print "\nNormalizing data ... "
       start = Time.now
       max_normalized = data.max - data.min
       min = data.min
       step = 255.0 / max_normalized
-      print "#{Time.now - start}s"
 
       f = ChunkyPNG::Image.new(@pixel_count_x, @pixel_count_y)
 
