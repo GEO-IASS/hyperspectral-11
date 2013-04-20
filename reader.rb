@@ -10,6 +10,7 @@ class Reader < FXMainWindow
   IMAGE_WIDTH = 300
   IMAGE_HEIGHT = 300
   AXIS_PADDING = 30
+  DEFAULT_DIR = "../imzML/example_files"
 
   def initialize(app)
     super(app, "imzML Reader", :width => 600, :height => 600)
@@ -19,6 +20,14 @@ class Reader < FXMainWindow
 
     @imzml = nil
     @font = FXFont.new(app, "times")
+
+    # progress dialog
+    @progress_dialog = FXProgressDialog.new(self, "Please wait", "Loading data")
+    @progress_dialog.connect(SEL_UPDATE) do |sender, sel, event|
+      if sender.progress >= sender.total
+        sender.handle(sender, MKUINT(FXDialogBox::ID_ACCEPT, SEL_COMMAND), nil)
+      end
+    end
 
     # hyperspectral image
     vertical_frame = FXVerticalFrame.new(self, :opts => LAYOUT_FILL)
@@ -59,7 +68,31 @@ class Reader < FXMainWindow
     # tab settings
     @tabbook = FXTabBook.new(top_horizontal_frame, :opts => LAYOUT_FILL_X|LAYOUT_RIGHT|LAYOUT_FILL_Y)
     @basics_tab = FXTabItem.new(@tabbook, "Basic")
-    FXMatrix.new(@tabbook, 2, FRAME_THICK|FRAME_RAISED)
+    matrix = FXMatrix.new(@tabbook, :opts => FRAME_THICK|FRAME_RAISED|LAYOUT_FILL_X)
+    matrix.numColumns = 2
+    matrix.numRows = 2
+    FXLabel.new(matrix, "m/z value", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
+    FXLabel.new(matrix, "interval value", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
+    @mz_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL)
+    @mz_textfield.connect(SEL_COMMAND) do |sender, sel, event|
+      if sender.text.size > 0
+        @selected_mz = sender.text.to_f
+
+        run_on_background do
+          read_data_and_create_hyperspectral_image
+        end
+      end
+    end
+    @interval_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL)
+    @interval_textfield.connect(SEL_COMMAND) do |sender, sel, event|
+      if sender.text.size > 0
+        @selected_interval = sender.text.to_f
+
+        run_on_background do
+          read_data_and_create_hyperspectral_image
+        end
+      end
+    end
 
     # spectrum part
     bottom_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
@@ -121,8 +154,11 @@ class Reader < FXMainWindow
       if @mouse_left_down
         @spectrum_canvas.ungrab
         @mouse_left_down = false
+        @mz_textfield.text = @selected_mz.round(5).to_s
 
-        read_data_and_create_hyperspectral_image
+        run_on_background do
+          read_data_and_create_hyperspectral_image
+        end
       end
     end
 
@@ -190,20 +226,41 @@ class Reader < FXMainWindow
     # open file menu
     FXMenuCommand.new(file_menu, "Open...").connect(SEL_COMMAND) do
       dialog = FXFileDialog.new(self, "Open imzML file")
-      dialog.directory = "../imzML/example_files"
+      dialog.directory = "#{DEFAULT_DIR}"
       dialog.patternList = ["imzML files (*.imzML)"]
 
       # after success on opening
       if (dialog.execute != 0)
-        @progress = 0
-        @progress_message = "Opening file"
 
-        read_file(dialog.filename)
+        # show progress dialog and starts thread
+        run_on_background(3) do
+          read_file(dialog.filename)
+        end
+
       end
     end
 
     exit_cmd = FXMenuCommand.new(file_menu, "Exit")
     exit_cmd.connect(SEL_COMMAND) {exit}
+  end
+
+  def run_on_background(operations_count = 1)
+    @progress_dialog.progress = 0
+    @progress_dialog.total = operations_count
+    Thread.new {
+      yield
+    }
+    @progress_dialog.execute(PLACEMENT_OWNER)
+  end
+
+  def log(message = "Please wait")
+    start = Time.now
+
+    message = "#{message} ... "
+    @progress_dialog.message = message
+    print message
+    yield
+    print "#{Time.now - start}s\n"
   end
 
   def reset_to_default_values
@@ -226,74 +283,91 @@ class Reader < FXMainWindow
 
     reset_to_default_values
 
-    print "Parsing file #{filepath} ... "
-    @datapath = filepath.gsub(/imzML$/, "ibd")
-    imzml_parser = ImzMLParser.new()
-    @progress_message = "Parsing imzML file"
-    File.open(filepath, 'r') do |f|
-      Ox.sax_parse(imzml_parser, f)
+    log("Parsing imzML file") do
+      @datapath = filepath.gsub(/imzML$/, "ibd")
+      imzml_parser = ImzMLParser.new()
+      File.open(filepath, 'r') do |f|
+        Ox.sax_parse(imzml_parser, f)
+      end
+
+      @imzml = imzml_parser.metadata
     end
 
-    @imzml = imzml_parser.metadata
-    print "done \n"
+    @progress_dialog.increment(1)
 
     read_data_and_create_spectrum
     read_data_and_create_hyperspectral_image
   end
 
   def read_data_and_create_spectrum
-    # get spectrum min and max data
-    @selected_spectrum = (image_point_y - 1) * @imzml.pixel_count_x + (image_point_x - 1)
 
-    @mz_array = @imzml.spectrums[@selected_spectrum].mz_array(@datapath)
-    mz_min = @mz_array.first
-    mz_max = @mz_array.last
-    default_from, default_to = 0, @mz_array.size - 1
+    log("Reading spectrum data") do
 
-    # set default values
-    @mz_from ||= default_from
-    @mz_to ||= default_to
+      # get spectrum min and max data
+      @selected_spectrum = (image_point_y - 1) * @imzml.pixel_count_x + (image_point_x - 1)
 
-    # check top boundaries
-    @mz_from = default_from if @mz_from < default_from
-    @mz_to = default_to if @mz_to > default_to
+      @mz_array = @imzml.spectrums[@selected_spectrum].mz_array(@datapath)
+      mz_min = @mz_array.first
+      mz_max = @mz_array.last
+      default_from, default_to = 0, @mz_array.size - 1
 
-    @mz_array = @mz_array[@mz_from..@mz_to]
+      # set default values
+      @mz_from ||= default_from
+      @mz_to ||= default_to
 
-    @intensity_array = @imzml.spectrums[@selected_spectrum].intensity_array(@datapath)
-    @intensity_array = @intensity_array[@mz_from..@mz_to]
-    # p @intensity_array
-    @intensity_max = @intensity_array.max
-    @intensity_min = @intensity_array.min
+      # check top boundaries
+      @mz_from = default_from if @mz_from < default_from
+      @mz_to = default_to if @mz_to > default_to
 
+      @mz_array = @mz_array[@mz_from..@mz_to]
+
+      @intensity_array = @imzml.spectrums[@selected_spectrum].intensity_array(@datapath)
+      @intensity_array = @intensity_array[@mz_from..@mz_to]
+      @intensity_max = @intensity_array.max
+      @intensity_min = @intensity_array.min
+
+    end
+
+    @progress_dialog.increment(1)
     @spectrum_canvas.update
   end
 
   def read_data_and_create_hyperspectral_image
-    image = FXImage.new(getApp(), nil, IMAGE_KEEP|IMAGE_SHMI|IMAGE_SHMP, :width => @imzml.pixel_count_x, :height => @imzml.pixel_count_y)
 
-    scale_w = IMAGE_WIDTH
-    scale_h = IMAGE_HEIGHT
-    if image.width > image.height
-      scale_h = image.height.to_f/image.width.to_f * IMAGE_HEIGHT
-    else
-      scale_w = image.width.to_f/image.height.to_f * IMAGE_WIDTH
+    log("Creating hyperspectral image") do
+
+      image = FXImage.new(getApp(), nil, IMAGE_KEEP|IMAGE_SHMI|IMAGE_SHMP, :width => @imzml.pixel_count_x, :height => @imzml.pixel_count_y)
+
+      scale_w = IMAGE_WIDTH
+      scale_h = IMAGE_HEIGHT
+      if image.width > image.height
+        scale_h = image.height.to_f/image.width.to_f * IMAGE_HEIGHT
+      else
+        scale_w = image.width.to_f/image.height.to_f * IMAGE_WIDTH
+      end
+      image.pixels = image_data
+      @scale_x, @scale_y = scale_h/image.height, scale_w/image.width
+      image.scale(scale_w - 10, scale_h - 10)
+      image.create
+      @image = image
+
     end
-    image.pixels = image_data
-    @scale_x, @scale_y = scale_h/image.height, scale_w/image.width
-    image.scale(scale_w - 10, scale_h - 10)
-    image.create
-    @image = image
+
+    @progress_dialog.increment(1)
     @image_canvas.update
   end
 
   def image_data
 
-    data = @imzml.image_data(@datapath, @selected_mz, @selected_interval)
+    @progress_dialog.total += @imzml.spectrums.size
+    data = @imzml.image_data(@datapath, @selected_mz, @selected_interval) do |id|
+      @progress_dialog.increment(1)
+    end
 
     # row, column, i = 0, 0, 0
     # direction_right = true
 
+    # FIXME sometimes there is nil in data array
     max_normalized = data.max - data.min
     max_normalized = 1 if max_normalized == 0
     min = data.min
