@@ -10,15 +10,16 @@ class Reader < FXMainWindow
   IMAGE_WIDTH = 300
   IMAGE_HEIGHT = 300
   AXIS_PADDING = 30
-  LINE_INDICATOR_HEIGHT = 5
 
   def initialize(app)
     super(app, "imzML Reader", :width => 600, :height => 600)
     add_menu_bar
 
-    @selected_x,@selected_y = 0, 0
+    @selected_x, @selected_y = 0, 0
     @scale_x, @scale_y = 1, 1
     @selected_spectrum = 0
+    @selected_mz = 0
+    @selected_interval = 0
 
     @imzml = nil
     @font = FXFont.new(app, "times")
@@ -33,10 +34,10 @@ class Reader < FXMainWindow
     @image_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
       @selected_x, @selected_y = event.win_x, event.win_y
       @image_canvas.update
-      @mouse_down = true
+      @mouse_right_down = true
     end
     @image_canvas.connect(SEL_MOTION) do |sender, sel, event|
-      if @mouse_down
+      if @mouse_right_down
         @selected_x, @selected_y = event.win_x, event.win_y
         @selected_y = 0 if @selected_y < 0
         @selected_y = @image_canvas.height if @selected_y > @image_canvas.height
@@ -47,8 +48,8 @@ class Reader < FXMainWindow
       end
     end
     @image_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
-      if @mouse_down
-        @mouse_down = false
+      if @mouse_right_down
+        @mouse_right_down = false
         @status_line.text = "Reading spectrum at #{image_point_x}x#{image_point_y}"
 
         @mz_from = @mz_to = nil
@@ -74,25 +75,33 @@ class Reader < FXMainWindow
     @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
     @spectrum_canvas.connect(SEL_PAINT, method(:canvas_repaint))
     @spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
-      @mouse_down = true
+      @mouse_right_down = true
       @spectrum_canvas.grab
       @zoom_from_x = event.win_x - AXIS_PADDING
       @zoom_from_x = @x_axis_width if @zoom_from_x > @x_axis_width
       @zoom_from_x = 0 if @zoom_from_x < 0
     end
     @spectrum_canvas.connect(SEL_MOTION) do |sender, sel, event|
-      if @mouse_down
+      if @mouse_right_down
         @zoom_to_x = event.win_x - AXIS_PADDING
         @zoom_to_x = @x_axis_width if @zoom_to_x > @x_axis_width
         @zoom_to_x = 0 if @zoom_to_x < 0
         @status_line.text = "Zoom from #{@mz_array[@zoom_from_x/@x_point_size]} to #{@mz_array[@zoom_to_x/@x_point_size]}"
         @spectrum_canvas.update
+      elsif @mouse_left_down
+        selected_mz_x = event.win_x - AXIS_PADDING
+        selected_mz_x = @x_axis_width if selected_mz_x > @x_axis_width
+        selected_mz_x = 0 if selected_mz_x < 0
+        selected_mz_x = (selected_mz_x / @x_point_size).to_i
+        @selected_mz = @mz_array[selected_mz_x]
+        @status_line.text = "Selected MZ value #{@selected_mz}"
+        @spectrum_canvas.update
       end
     end
     @spectrum_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
-      if @mouse_down
+      if @mouse_right_down
         @spectrum_canvas.ungrab
-        @mouse_down = false
+        @mouse_right_down = false
 
         # zoom to selected values
         from = (@zoom_to_x > @zoom_from_x) ? @zoom_from_x : @zoom_to_x
@@ -106,6 +115,18 @@ class Reader < FXMainWindow
         @zoom_to_x = @zoom_from_x = nil
 
         read_data_and_create_spectrum
+      end
+    end
+    @spectrum_canvas.connect(SEL_RIGHTBUTTONPRESS) do |sender, sel, event|
+      @mouse_left_down = true
+      @spectrum_canvas.grab
+    end
+    @spectrum_canvas.connect(SEL_RIGHTBUTTONRELEASE) do |sender, sel, event|
+      if @mouse_left_down
+        @spectrum_canvas.ungrab
+        @mouse_left_down = false
+
+        read_data_and_create_hyperspectral_image
       end
     end
 
@@ -150,16 +171,9 @@ class Reader < FXMainWindow
     @status_line = status_bar.statusLine
 
     # FIXME debug
-    read_file("/Users/beny/Dropbox/School/dp/imzML/test_files/testovaci_blbost.imzML")
-
-  end
-
-  def image_point_x
-    (@selected_x/@scale_x).to_i + 1
-  end
-
-  def image_point_y
-    (@selected_y/@scale_y).to_i + 1
+    # read_file("/Users/beny/Dropbox/School/dp/imzML/test_files/testovaci_blbost.imzML")
+    # @image_canvas.update
+    # @spectrum_canvas.update
   end
 
   def create
@@ -194,6 +208,14 @@ class Reader < FXMainWindow
 
     exit_cmd = FXMenuCommand.new(file_menu, "Exit")
     exit_cmd.connect(SEL_COMMAND) {exit}
+  end
+
+  def image_point_x
+    (@selected_x/@scale_x).to_i + 1
+  end
+
+  def image_point_y
+    (@selected_y/@scale_y).to_i + 1
   end
 
   def read_file(filepath)
@@ -234,6 +256,7 @@ class Reader < FXMainWindow
 
     @intensity_array = @imzml.spectrums[@selected_spectrum].intensity_array(@datapath)
     @intensity_array = @intensity_array[@mz_from..@mz_to]
+    # p @intensity_array
     @intensity_max = @intensity_array.max
     @intensity_min = @intensity_array.min
 
@@ -260,7 +283,7 @@ class Reader < FXMainWindow
 
   def image_data
 
-    data = @imzml.image_data(@datapath, 2568.0, 0.1)
+    data = @imzml.image_data(@datapath, @selected_mz, @selected_interval)
 
     # row, column, i = 0, 0, 0
     # direction_right = true
@@ -317,11 +340,6 @@ class Reader < FXMainWindow
           # draw line only when sent event is correct
           if (@imzml && event.rect.w > AXIS_PADDING && event.rect.h > AXIS_PADDING)
 
-            # draw selected mz
-            # dc.lineStyle = LINE_ONOFF_DASH
-            # dc.drawLine(event.rect.w / 2, event.rect.h - AXIS_PADDING + LINE_INDICATOR_HEIGHT, event.rect.w/2, AXIS_PADDING + LINE_INDICATOR_HEIGHT)
-            # dc.lineStyle = LINE_SOLID
-
             # axis dimensions
             @x_axis_width = event.rect.w - 2 * AXIS_PADDING
             @x_point_size = @x_axis_width.to_f / (@mz_array.size - 1).to_f
@@ -334,7 +352,7 @@ class Reader < FXMainWindow
             dc.drawText(event.rect.w / 2, event.rect.h - AXIS_PADDING/2, (@mz_array[@mz_array.size/2]).round(2).to_s)
             dc.drawText(event.rect.w - 2 * AXIS_PADDING, event.rect.h - AXIS_PADDING/2, @mz_array.last.round(2).to_s)
 
-            # draw intensitu numbers
+            # draw intensity numbers
             dc.drawText(5, event.rect.h/2, (@intensity_max/2).round(2).to_s)
             dc.drawText(5, AXIS_PADDING + AXIS_PADDING/2, @intensity_max.round(2).to_s)
 
@@ -346,9 +364,21 @@ class Reader < FXMainWindow
               i += @x_point_size
               FXPoint.new(x_point, y_point)
             end
+
             # draw spectrum line
             dc.foreground = FXColor::Red
             dc.drawLines(points)
+
+            # draw selected mz
+            if @selected_mz && @mz_array.include?(@selected_mz)
+              index = @mz_array.index(@selected_mz)
+              line_x = AXIS_PADDING + index * @x_point_size
+              dc.foreground = FXColor::Blue
+              dc.lineStyle = LINE_ONOFF_DASH
+              dc.drawLine(line_x, event.rect.h - AXIS_PADDING, line_x, AXIS_PADDING)
+              dc.drawText(line_x - 5, event.rect.h - AXIS_PADDING/2, @selected_mz.round(2).to_s)
+              dc.lineStyle = LINE_SOLID
+            end
 
             # draw zoom rect
             if @zoom_from_x && @zoom_to_x
@@ -372,7 +402,7 @@ class Reader < FXMainWindow
           dc.foreground = FXColor::Green
           dc.drawLine(@selected_x, 0, @selected_x, event.rect.h)
           dc.drawLine(0, @selected_y, event.rect.w, @selected_y)
-          @status_line.normalText = "Selected point #{image_point_x}x#{image_point_y}"
+          @status_line.normalText = "Image point #{image_point_x}x#{image_point_y}, MZ value #{@selected_mz}"
           @status_line.text = @status_line.normalText
         end
       end
