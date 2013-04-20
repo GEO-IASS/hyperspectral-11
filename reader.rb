@@ -15,11 +15,7 @@ class Reader < FXMainWindow
     super(app, "imzML Reader", :width => 600, :height => 600)
     add_menu_bar
 
-    @selected_x, @selected_y = 0, 0
-    @scale_x, @scale_y = 1, 1
-    @selected_spectrum = 0
-    @selected_mz = 0
-    @selected_interval = 0
+    reset_to_default_values
 
     @imzml = nil
     @font = FXFont.new(app, "times")
@@ -61,13 +57,13 @@ class Reader < FXMainWindow
     # tab settings
     @tabbook = FXTabBook.new(top_horizontal_frame, :opts => LAYOUT_FILL_X|LAYOUT_RIGHT|LAYOUT_FILL_Y)
     @basics_tab = FXTabItem.new(@tabbook, "Basic")
-    FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
-    @calibration_tab = FXTabItem.new(@tabbook, "Calibration")
-    FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
-    @baseline_correction_tab = FXTabItem.new(@tabbook, "Baseline correction")
-    FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
-    @normalization_tab = FXTabItem.new(@tabbook, "Normalization")
-    FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
+    FXMatrix.new(@tabbook, 2, FRAME_THICK|FRAME_RAISED)
+    # @calibration_tab = FXTabItem.new(@tabbook, "Calibration")
+    # FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
+    # @baseline_correction_tab = FXTabItem.new(@tabbook, "Baseline correction")
+    # FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
+    # @normalization_tab = FXTabItem.new(@tabbook, "Normalization")
+    # FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
 
     # spectrum part
     bottom_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
@@ -210,6 +206,15 @@ class Reader < FXMainWindow
     exit_cmd.connect(SEL_COMMAND) {exit}
   end
 
+  def reset_to_default_values
+    @selected_x, @selected_y = 0, 0
+    @scale_x, @scale_y = 1, 1
+    @selected_spectrum = 0
+    @selected_mz = 0
+    @selected_interval = 0
+
+  end
+
   def image_point_x
     (@selected_x/@scale_x).to_i + 1
   end
@@ -219,6 +224,8 @@ class Reader < FXMainWindow
   end
 
   def read_file(filepath)
+
+    reset_to_default_values
 
     print "Parsing file #{filepath} ... "
     @datapath = filepath.gsub(/imzML$/, "ibd")
