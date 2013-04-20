@@ -28,7 +28,6 @@ class Reader < FXMainWindow
     top_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X)
 
     image_container = FXPacker.new(top_horizontal_frame, :opts => FRAME_SUNKEN|LAYOUT_FIX_WIDTH|LAYOUT_FIX_HEIGHT, :width => IMAGE_WIDTH, :height => IMAGE_HEIGHT)
-    # @hyperspectral_image = FXImageView.new(nil, nil, :opts => LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL)
     @image_canvas = FXCanvas.new(image_container, :opts => LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL)
     @image_canvas.connect(SEL_PAINT, method(:canvas_repaint))
     @image_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
@@ -51,6 +50,9 @@ class Reader < FXMainWindow
       if @mouse_down
         @mouse_down = false
         @status_line.text = "Reading spectrum at #{image_point_x}x#{image_point_y}"
+
+        @mz_from = @mz_to = nil
+
         read_data_and_create_spectrum
       end
     end
@@ -71,6 +73,41 @@ class Reader < FXMainWindow
 
     @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
     @spectrum_canvas.connect(SEL_PAINT, method(:canvas_repaint))
+    @spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
+      @mouse_down = true
+      @spectrum_canvas.grab
+      @zoom_from_x = event.win_x - AXIS_PADDING
+      @zoom_from_x = @x_axis_width if @zoom_from_x > @x_axis_width
+      @zoom_from_x = 0 if @zoom_from_x < 0
+    end
+    @spectrum_canvas.connect(SEL_MOTION) do |sender, sel, event|
+      if @mouse_down
+        @zoom_to_x = event.win_x - AXIS_PADDING
+        @zoom_to_x = @x_axis_width if @zoom_to_x > @x_axis_width
+        @zoom_to_x = 0 if @zoom_to_x < 0
+        @status_line.text = "Zoom from #{@mz_array[@zoom_from_x/@x_point_size]} to #{@mz_array[@zoom_to_x/@x_point_size]}"
+        @spectrum_canvas.update
+      end
+    end
+    @spectrum_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
+      if @mouse_down
+        @spectrum_canvas.ungrab
+        @mouse_down = false
+
+        # zoom to selected values
+        from = (@zoom_to_x > @zoom_from_x) ? @zoom_from_x : @zoom_to_x
+        to = (@zoom_to_x > @zoom_from_x) ? @zoom_to_x : @zoom_from_x
+        from = @mz_from + (from/ @x_point_size).to_i
+        to = @mz_from + (to / @x_point_size).to_i
+        @mz_from = from
+        @mz_to = to
+
+        # remove selectiong frame
+        @zoom_to_x = @zoom_from_x = nil
+
+        read_data_and_create_spectrum
+      end
+    end
 
     zoom_button_vertical_frame = FXVerticalFrame.new(bottom_horizontal_frame, :opts => LAYOUT_FIX_WIDTH|LAYOUT_FILL_Y, :width => 50)
 
@@ -87,7 +124,6 @@ class Reader < FXMainWindow
         read_data_and_create_spectrum
       end
     end
-
 
     zoom_reset_buttom = FXButton.new(zoom_button_vertical_frame, "100%", :opts => FRAME_RAISED|LAYOUT_FILL)
     zoom_reset_buttom.connect(SEL_COMMAND) do
@@ -287,13 +323,11 @@ class Reader < FXMainWindow
             # dc.lineStyle = LINE_SOLID
 
             # axis dimensions
-            x_axis_width = event.rect.w - 2 * AXIS_PADDING
-            x_point_size = x_axis_width.to_f / (@mz_array.size - 1).to_f
+            @x_axis_width = event.rect.w - 2 * AXIS_PADDING
+            @x_point_size = @x_axis_width.to_f / (@mz_array.size - 1).to_f
             y_axis_height = event.rect.h - 2 * AXIS_PADDING
             y_point_size = y_axis_height / @intensity_max
             y_baseline = event.rect.h - AXIS_PADDING - 1
-
-
 
             # draw mz numbers
             dc.drawText(AXIS_PADDING, event.rect.h - AXIS_PADDING/2, @mz_array.first.round(2).to_s)
@@ -307,15 +341,21 @@ class Reader < FXMainWindow
             # map spectrum points to canvas
             i = 0.0
             points = @mz_array.zip(@intensity_array).map do |coords|
-              # x_point = AXIS_PADDING + 1 + (coords[0] * x_point_size).to_i
               x_point = (AXIS_PADDING + 1 + i).to_i
               y_point = y_baseline - (coords[1] * y_point_size).to_i
-              i += x_point_size
+              i += @x_point_size
               FXPoint.new(x_point, y_point)
             end
             # draw spectrum line
             dc.foreground = FXColor::Red
             dc.drawLines(points)
+
+            # draw zoom rect
+            if @zoom_from_x && @zoom_to_x
+              dc.foreground = FXColor::Blue
+              start_from = (@zoom_from_x > @zoom_to_x) ? @zoom_to_x : @zoom_from_x
+              dc.drawRectangle(AXIS_PADDING + start_from, AXIS_PADDING, (@zoom_from_x - @zoom_to_x).abs, event.rect.h - 2 * AXIS_PADDING)
+            end
           end
         when @image_canvas
 
