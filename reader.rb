@@ -210,9 +210,8 @@ class Reader < FXMainWindow
     @selected_x, @selected_y = 0, 0
     @scale_x, @scale_y = 1, 1
     @selected_spectrum = 0
-    @selected_mz = 0
+    @selected_mz = nil
     @selected_interval = 0
-
   end
 
   def image_point_x
@@ -244,7 +243,7 @@ class Reader < FXMainWindow
 
   def read_data_and_create_spectrum
     # get spectrum min and max data
-    @selected_spectrum = image_point_x * image_point_y
+    @selected_spectrum = (image_point_y - 1) * @imzml.pixel_count_x + (image_point_x - 1)
 
     @mz_array = @imzml.spectrums[@selected_spectrum].mz_array(@datapath)
     mz_min = @mz_array.first
@@ -290,14 +289,13 @@ class Reader < FXMainWindow
 
   def image_data
 
-    p "datapath #{@datapath}, selected mz #{@selected_mz}, selected interval #{@selected_interval}"
     data = @imzml.image_data(@datapath, @selected_mz, @selected_interval)
 
     # row, column, i = 0, 0, 0
     # direction_right = true
 
-    p "data #{data}"
     max_normalized = data.max - data.min
+    max_normalized = 1 if max_normalized == 0
     min = data.min
     step = 255.0 / max_normalized
 

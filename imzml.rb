@@ -52,18 +52,30 @@ module IMZML
 
     def intensity(data_path, at, interval)
 
+      raise "Interval cannot be nil" if !interval
+
       # read array and intensity data
       mz_array = mz_array(data_path)
       intensity_array = intensity_array(data_path)
 
-      # find designated intensity
-      low_value = search_binary(mz_array, at - interval)
-      low_index = mz_array.index(low_value)
-      high_value = search_binary(mz_array, at + interval)
-      high_index = mz_array.index(high_value)
+      default_from, default_to = mz_array.first, mz_array.first
 
-      p "high_value #{high_value}"
-      p "low index #{low_index}, high index #{high_index}"
+      # find designated intensity
+      if !at
+        from = default_from
+        to = default_to
+      else
+        from = at - interval
+        from = default_from if from < 0
+        to = at + interval
+        to = default_to if to > mz_array.last
+      end
+
+      # find values in mz array
+      low_value = search_binary(mz_array, from)
+      low_index = mz_array.index(low_value)
+      high_value = search_binary(mz_array, to)
+      high_index = mz_array.index(high_value)
 
       # sum all values in subarray
       intensity_array[low_index..high_index].inject{|sum, x| sum + x}
