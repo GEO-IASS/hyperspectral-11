@@ -28,9 +28,11 @@ class Reader < FXMainWindow
     @image_canvas = FXCanvas.new(image_container, :opts => LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL)
     @image_canvas.connect(SEL_PAINT, method(:canvas_repaint))
     @image_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
-      @selected_x, @selected_y = event.win_x, event.win_y
-      @image_canvas.update
-      @mouse_right_down = true
+      if @imzml
+        @selected_x, @selected_y = event.win_x, event.win_y
+        @image_canvas.update
+        @mouse_right_down = true
+      end
     end
     @image_canvas.connect(SEL_MOTION) do |sender, sel, event|
       if @mouse_right_down
@@ -58,12 +60,6 @@ class Reader < FXMainWindow
     @tabbook = FXTabBook.new(top_horizontal_frame, :opts => LAYOUT_FILL_X|LAYOUT_RIGHT|LAYOUT_FILL_Y)
     @basics_tab = FXTabItem.new(@tabbook, "Basic")
     FXMatrix.new(@tabbook, 2, FRAME_THICK|FRAME_RAISED)
-    # @calibration_tab = FXTabItem.new(@tabbook, "Calibration")
-    # FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
-    # @baseline_correction_tab = FXTabItem.new(@tabbook, "Baseline correction")
-    # FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
-    # @normalization_tab = FXTabItem.new(@tabbook, "Normalization")
-    # FXHorizontalFrame.new(@tabbook, FRAME_THICK|FRAME_RAISED)
 
     # spectrum part
     bottom_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
@@ -71,11 +67,13 @@ class Reader < FXMainWindow
     @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
     @spectrum_canvas.connect(SEL_PAINT, method(:canvas_repaint))
     @spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
-      @mouse_right_down = true
-      @spectrum_canvas.grab
-      @zoom_from_x = event.win_x - AXIS_PADDING
-      @zoom_from_x = @x_axis_width if @zoom_from_x > @x_axis_width
-      @zoom_from_x = 0 if @zoom_from_x < 0
+      if @imzml
+        @mouse_right_down = true
+        @spectrum_canvas.grab
+        @zoom_from_x = event.win_x - AXIS_PADDING
+        @zoom_from_x = @x_axis_width if @zoom_from_x > @x_axis_width
+        @zoom_from_x = 0 if @zoom_from_x < 0
+      end
     end
     @spectrum_canvas.connect(SEL_MOTION) do |sender, sel, event|
       if @mouse_right_down
@@ -114,8 +112,10 @@ class Reader < FXMainWindow
       end
     end
     @spectrum_canvas.connect(SEL_RIGHTBUTTONPRESS) do |sender, sel, event|
-      @mouse_left_down = true
-      @spectrum_canvas.grab
+      if @imzml
+        @mouse_left_down = true
+        @spectrum_canvas.grab
+      end
     end
     @spectrum_canvas.connect(SEL_RIGHTBUTTONRELEASE) do |sender, sel, event|
       if @mouse_left_down
@@ -190,7 +190,7 @@ class Reader < FXMainWindow
     # open file menu
     FXMenuCommand.new(file_menu, "Open...").connect(SEL_COMMAND) do
       dialog = FXFileDialog.new(self, "Open imzML file")
-      dialog.directory = "../imzML/test_files"
+      dialog.directory = "../imzML/example_files"
       dialog.patternList = ["imzML files (*.imzML)"]
 
       # after success on opening
@@ -290,11 +290,13 @@ class Reader < FXMainWindow
 
   def image_data
 
+    p "datapath #{@datapath}, selected mz #{@selected_mz}, selected interval #{@selected_interval}"
     data = @imzml.image_data(@datapath, @selected_mz, @selected_interval)
 
     # row, column, i = 0, 0, 0
     # direction_right = true
 
+    p "data #{data}"
     max_normalized = data.max - data.min
     min = data.min
     step = 255.0 / max_normalized
@@ -405,12 +407,14 @@ class Reader < FXMainWindow
             dc.drawImage(@image, 0, 0)
           end
 
-          # draw cross
-          dc.foreground = FXColor::Green
-          dc.drawLine(@selected_x, 0, @selected_x, event.rect.h)
-          dc.drawLine(0, @selected_y, event.rect.w, @selected_y)
-          @status_line.normalText = "Image point #{image_point_x}x#{image_point_y}, MZ value #{@selected_mz}"
-          @status_line.text = @status_line.normalText
+          if @imzml
+            # draw cross
+            dc.foreground = FXColor::Green
+            dc.drawLine(@selected_x, 0, @selected_x, event.rect.h)
+            dc.drawLine(0, @selected_y, event.rect.w, @selected_y)
+            @status_line.normalText = "Image point #{image_point_x}x#{image_point_y}, MZ value #{@selected_mz}"
+            @status_line.text = @status_line.normalText
+          end
         end
       end
     end
