@@ -10,14 +10,12 @@ class Reader < FXMainWindow
   IMAGE_WIDTH = 300
   IMAGE_HEIGHT = 300
   AXIS_PADDING = 30
-  DEFAULT_DIR = "../imzML/example_files"
+  DEFAULT_DIR = "../imzML/"
   ROUND_DIGITS = 4
 
   def initialize(app)
     super(app, "imzML Reader", :width => 600, :height => 600)
     add_menu_bar
-
-    reset_to_default_values
 
     @imzml = nil
     @font = FXFont.new(app, "times")
@@ -51,7 +49,6 @@ class Reader < FXMainWindow
         @selected_y = @image_canvas.height if @selected_y > @image_canvas.height
         @selected_x = 0 if @selected_x < 0
         @selected_x = @image_canvas.width if @selected_x > @image_canvas.width
-
         @image_canvas.update
       end
     end
@@ -81,7 +78,6 @@ class Reader < FXMainWindow
         index = @mz_array.index{|x| x >= sender.text.to_f}
         @selected_mz = @mz_array[index]
         sender.text = @selected_mz.round(ROUND_DIGITS).to_s
-        @spectrum_canvas.update
 
         run_on_background do
           read_data_and_create_hyperspectral_image
@@ -213,6 +209,7 @@ class Reader < FXMainWindow
     super
 
     @font.create
+    reset_to_default_values
 
     show(PLACEMENT_SCREEN)
 
@@ -275,6 +272,9 @@ class Reader < FXMainWindow
     @selected_spectrum = 0
     @selected_mz = nil
     @selected_interval = 0
+    @selected_interval_low = @selected_interval_high = nil
+
+    @interval_textfield.text = @selected_interval.to_s
   end
 
   def image_point_x
@@ -283,6 +283,16 @@ class Reader < FXMainWindow
 
   def image_point_y
     (@selected_y/@scale_y).to_i + 1
+  end
+
+  def calculate_interval_indexes
+    if @selected_interval && @selected_mz
+
+      # find the closest interval values
+      @selected_interval_low = @mz_array.index{|x| x >= @selected_mz - @selected_interval}
+      @selected_interval_high = @mz_array.index{|x| x >= @selected_mz + @selected_interval}
+      @spectrum_canvas.update
+    end
   end
 
   def read_file(filepath)
@@ -336,6 +346,8 @@ class Reader < FXMainWindow
 
     end
 
+    calculate_interval_indexes
+
     @progress_dialog.increment(1)
     @spectrum_canvas.update
   end
@@ -360,6 +372,8 @@ class Reader < FXMainWindow
       @image = image
 
     end
+
+    calculate_interval_indexes
 
     @progress_dialog.increment(1)
     @image_canvas.update
@@ -462,10 +476,19 @@ class Reader < FXMainWindow
               index = @mz_array.index(@selected_mz)
               line_x = AXIS_PADDING + index * @x_point_size
               dc.foreground = FXColor::Blue
-              dc.lineStyle = LINE_ONOFF_DASH
+
               dc.drawLine(line_x, sender.height - AXIS_PADDING, line_x, AXIS_PADDING)
               text =
               dc.drawText(line_x - 5, (sender.height - AXIS_PADDING/2) + @font.getTextHeight(center_text), @selected_mz.round(ROUND_DIGITS).to_s)
+
+              dc.lineStyle = LINE_ONOFF_DASH
+              # interval lines
+              if @selected_interval_low && @selected_interval_high
+                line_x = AXIS_PADDING + @selected_interval_low * @x_point_size
+                dc.drawLine(line_x, sender.height - AXIS_PADDING, line_x, AXIS_PADDING)
+                line_x = AXIS_PADDING + @selected_interval_high * @x_point_size
+                dc.drawLine(line_x, sender.height - AXIS_PADDING, line_x, AXIS_PADDING)
+              end
               dc.lineStyle = LINE_SOLID
             end
 
