@@ -11,6 +11,7 @@ class Reader < FXMainWindow
   IMAGE_HEIGHT = 300
   AXIS_PADDING = 30
   DEFAULT_DIR = "../imzML/example_files"
+  ROUND_DIGITS = 4
 
   def initialize(app)
     super(app, "imzML Reader", :width => 600, :height => 600)
@@ -35,7 +36,7 @@ class Reader < FXMainWindow
 
     image_container = FXPacker.new(top_horizontal_frame, :opts => FRAME_SUNKEN|LAYOUT_FIX_WIDTH|LAYOUT_FIX_HEIGHT, :width => IMAGE_WIDTH, :height => IMAGE_HEIGHT)
     @image_canvas = FXCanvas.new(image_container, :opts => LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL)
-    @image_canvas.connect(SEL_PAINT, method(:canvas_repaint))
+    @image_canvas.connect(SEL_PAINT, method(:draw_canvas))
     @image_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
       if @imzml
         @selected_x, @selected_y = event.win_x, event.win_y
@@ -76,7 +77,11 @@ class Reader < FXMainWindow
     @mz_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL)
     @mz_textfield.connect(SEL_COMMAND) do |sender, sel, event|
       if sender.text.size > 0
-        @selected_mz = sender.text.to_f
+        # find the closest existing point and set as mz value
+        index = @mz_array.index{|x| x >= sender.text.to_f}
+        @selected_mz = @mz_array[index]
+        sender.text = @selected_mz.round(ROUND_DIGITS).to_s
+        @spectrum_canvas.update
 
         run_on_background do
           read_data_and_create_hyperspectral_image
@@ -87,6 +92,7 @@ class Reader < FXMainWindow
     @interval_textfield.connect(SEL_COMMAND) do |sender, sel, event|
       if sender.text.size > 0
         @selected_interval = sender.text.to_f
+        @spectrum_canvas.update
 
         run_on_background do
           read_data_and_create_hyperspectral_image
@@ -98,7 +104,7 @@ class Reader < FXMainWindow
     bottom_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
 
     @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
-    @spectrum_canvas.connect(SEL_PAINT, method(:canvas_repaint))
+    @spectrum_canvas.connect(SEL_PAINT, method(:draw_canvas))
     @spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
       if @imzml
         @mouse_right_down = true
@@ -154,7 +160,7 @@ class Reader < FXMainWindow
       if @mouse_left_down
         @spectrum_canvas.ungrab
         @mouse_left_down = false
-        @mz_textfield.text = @selected_mz.round(5).to_s
+        @mz_textfield.text = @selected_mz.round(ROUND_DIGITS).to_s if !@selected_mz.nil?
 
         run_on_background do
           read_data_and_create_hyperspectral_image
@@ -201,11 +207,6 @@ class Reader < FXMainWindow
     status_bar = FXStatusBar.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FIX_HEIGHT, :height => 30)
     # status_bar.cornerStyle = true
     @status_line = status_bar.statusLine
-
-    # FIXME debug
-    # read_file("/Users/beny/Dropbox/School/dp/imzML/test_files/testovaci_blbost.imzML")
-    # @image_canvas.update
-    # @spectrum_canvas.update
   end
 
   def create
@@ -214,6 +215,11 @@ class Reader < FXMainWindow
     @font.create
 
     show(PLACEMENT_SCREEN)
+
+    # FIXME debug
+    run_on_background do
+      read_file("/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML")
+    end
   end
 
   def add_menu_bar
@@ -284,6 +290,8 @@ class Reader < FXMainWindow
     reset_to_default_values
 
     log("Parsing imzML file") do
+      @filename = filepath.split("/").last
+      self.title = @filename
       @datapath = filepath.gsub(/imzML$/, "ibd")
       imzml_parser = ImzMLParser.new()
       File.open(filepath, 'r') do |f|
@@ -397,45 +405,44 @@ class Reader < FXMainWindow
 
   end
 
-  def canvas_repaint(sender, sel, event)
+  def draw_canvas(sender, sel, event)
     if sender && sel && event
       FXDCWindow.new(sender, event) do |dc|
         case sender
         when @spectrum_canvas
           # draw background
           dc.foreground = FXColor::White
-          dc.fillRectangle(event.rect.x, event.rect.y, event.rect.w, event.rect.h)
+          dc.fillRectangle(0, 0, sender.width, sender.height)
 
           # draw axis
           dc.foreground = FXColor::Black
 
-          # x axis
-          dc.drawLine(AXIS_PADDING, event.rect.h - AXIS_PADDING, event.rect.w - AXIS_PADDING, event.rect.h - AXIS_PADDING)
+          # x and y axis
+          dc.drawLine(AXIS_PADDING, sender.height - AXIS_PADDING, sender.width - AXIS_PADDING, sender.height - AXIS_PADDING)
+          dc.drawLine(AXIS_PADDING, sender.height - AXIS_PADDING, AXIS_PADDING, AXIS_PADDING)
 
-          # y axis
-          dc.drawLine(AXIS_PADDING, event.rect.h - AXIS_PADDING, AXIS_PADDING, AXIS_PADDING)
-
+          # y axis description
           dc.font = @font
-          dc.drawText(AXIS_PADDING/2, event.rect.h - AXIS_PADDING, "0")
+          dc.drawText(AXIS_PADDING/2, sender.height - AXIS_PADDING, "0")
 
-          # draw line only when sent event is correct
-          if (@imzml && event.rect.w > AXIS_PADDING && event.rect.h > AXIS_PADDING)
+          if @imzml
 
             # axis dimensions
-            @x_axis_width = event.rect.w - 2 * AXIS_PADDING
+            @x_axis_width = sender.width - 2 * AXIS_PADDING
             @x_point_size = @x_axis_width.to_f / (@mz_array.size - 1).to_f
-            y_axis_height = event.rect.h - 2 * AXIS_PADDING
+            y_axis_height = sender.height - 2 * AXIS_PADDING
             y_point_size = y_axis_height / @intensity_max
-            y_baseline = event.rect.h - AXIS_PADDING - 1
+            y_baseline = sender.height - AXIS_PADDING - 1
 
             # draw mz numbers
-            dc.drawText(AXIS_PADDING, event.rect.h - AXIS_PADDING/2, @mz_array.first.round(2).to_s)
-            dc.drawText(event.rect.w / 2, event.rect.h - AXIS_PADDING/2, (@mz_array[@mz_array.size/2]).round(2).to_s)
-            dc.drawText(event.rect.w - 2 * AXIS_PADDING, event.rect.h - AXIS_PADDING/2, @mz_array.last.round(2).to_s)
+            dc.drawText(AXIS_PADDING, sender.height - AXIS_PADDING/2, @mz_array.first.round(ROUND_DIGITS).to_s)
+            center_text = (@mz_array[@mz_array.size/2]).round(ROUND_DIGITS).to_s
+            dc.drawText(sender.width / 2, sender.height - AXIS_PADDING/2, center_text)
+            dc.drawText(sender.width - 2 * AXIS_PADDING, sender.height - AXIS_PADDING/2, @mz_array.last.round(ROUND_DIGITS).to_s)
 
             # draw intensity numbers
-            dc.drawText(5, event.rect.h/2, (@intensity_max/2).round(2).to_s)
-            dc.drawText(5, AXIS_PADDING + AXIS_PADDING/2, @intensity_max.round(2).to_s)
+            dc.drawText(5, sender.height/2, (@intensity_max/2).round(ROUND_DIGITS).to_s)
+            dc.drawText(5, AXIS_PADDING + AXIS_PADDING/2, @intensity_max.round(ROUND_DIGITS).to_s)
 
             # map spectrum points to canvas
             i = 0.0
@@ -451,13 +458,14 @@ class Reader < FXMainWindow
             dc.drawLines(points)
 
             # draw selected mz
-            if @selected_mz && @mz_array.include?(@selected_mz)
+            if @selected_mz && @selected_mz >= @mz_array.first && @selected_mz <= @mz_array.last
               index = @mz_array.index(@selected_mz)
               line_x = AXIS_PADDING + index * @x_point_size
               dc.foreground = FXColor::Blue
               dc.lineStyle = LINE_ONOFF_DASH
-              dc.drawLine(line_x, event.rect.h - AXIS_PADDING, line_x, AXIS_PADDING)
-              dc.drawText(line_x - 5, event.rect.h - AXIS_PADDING/2, @selected_mz.round(2).to_s)
+              dc.drawLine(line_x, sender.height - AXIS_PADDING, line_x, AXIS_PADDING)
+              text =
+              dc.drawText(line_x - 5, (sender.height - AXIS_PADDING/2) + @font.getTextHeight(center_text), @selected_mz.round(ROUND_DIGITS).to_s)
               dc.lineStyle = LINE_SOLID
             end
 
@@ -465,7 +473,7 @@ class Reader < FXMainWindow
             if @zoom_from_x && @zoom_to_x
               dc.foreground = FXColor::Blue
               start_from = (@zoom_from_x > @zoom_to_x) ? @zoom_to_x : @zoom_from_x
-              dc.drawRectangle(AXIS_PADDING + start_from, AXIS_PADDING, (@zoom_from_x - @zoom_to_x).abs, event.rect.h - 2 * AXIS_PADDING)
+              dc.drawRectangle(AXIS_PADDING + start_from, AXIS_PADDING, (@zoom_from_x - @zoom_to_x).abs, sender.height - 2 * AXIS_PADDING)
             end
           end
         when @image_canvas
@@ -482,9 +490,9 @@ class Reader < FXMainWindow
           if @imzml
             # draw cross
             dc.foreground = FXColor::Green
-            dc.drawLine(@selected_x, 0, @selected_x, event.rect.h)
-            dc.drawLine(0, @selected_y, event.rect.w, @selected_y)
-            @status_line.normalText = "Image point #{image_point_x}x#{image_point_y}, MZ value #{@selected_mz}"
+            dc.drawLine(@selected_x, 0, @selected_x, sender.height)
+            dc.drawLine(0, @selected_y, sender.width, @selected_y)
+            @status_line.normalText = "Image point #{image_point_x}x#{image_point_y}"
             @status_line.text = @status_line.normalText
           end
         end
