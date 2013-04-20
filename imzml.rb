@@ -37,7 +37,7 @@ module IMZML
           data << spectrum.intensity(data_path, mz_value, interval)
         end
       # end
-      print "#{Time.now - start}s"
+      print "#{Time.now - start}s\n"
 
       # start = Time.now
 #       max_normalized = data.max - data.min
@@ -85,7 +85,7 @@ module IMZML
           data << spectrum.intensity(data_path, mz_value, interval)
         end
       # end
-      print "#{Time.now - start}s"
+      print "#{Time.now - start}s\n"
 
       start = Time.now
       max_normalized = data.max - data.min
@@ -95,7 +95,7 @@ module IMZML
       f = ChunkyPNG::Image.new(@pixel_count_x, @pixel_count_y)
 
       start = Time.now
-      print "\nCreating image #{@pixel_count_x}x#{@pixel_count_y} ... "
+      print "Creating image #{@pixel_count_x}x#{@pixel_count_y} ... "
 
       # PerfTools::CpuProfiler.start("/tmp/creating_image") do
 
@@ -119,7 +119,7 @@ module IMZML
 
       # end
 
-      print "#{Time.now - start}s"
+      print "#{Time.now - start}s\n"
 
       filename ||= "image.png"
       f.save("#{filename}.png", :interlace => true)
@@ -251,7 +251,7 @@ if __FILE__ == $0
   end
   #end
   imzml = any.metadata
-  print "#{Time.now - start}s"
+  print "#{Time.now - start}s\n"
 
   # TODO create some tests
   # print "\nPASS checksum equals" if IO.binread(ibd_path, 16).unpack("H*").first.upcase == imzml.uuid.upcase
@@ -261,7 +261,4 @@ if __FILE__ == $0
 
   # save image
   imzml.generate_image(filename, ibd_path, mz, interval)
-
-  print "\n"
-
 end

@@ -9,9 +9,11 @@ class Reader < FXMainWindow
 
   IMAGE_WIDTH = 300
   IMAGE_HEIGHT = 300
+  AXIS_PADDING = 30
+  LINE_INDICATOR_HEIGHT = 5
 
   def initialize(app)
-    super(app, "imzML Reader", :width => 1024, :height => 600)
+    super(app, "imzML Reader", :width => 600, :height => 600)
     add_menu_bar
 
     @selected_x,@selected_y = 0, 0
@@ -72,10 +74,39 @@ class Reader < FXMainWindow
 
     zoom_button_vertical_frame = FXVerticalFrame.new(bottom_horizontal_frame, :opts => LAYOUT_FIX_WIDTH|LAYOUT_FILL_Y, :width => 50)
 
-    # TODO implement
-    FXButton.new(zoom_button_vertical_frame, "+", :opts => FRAME_RAISED|LAYOUT_FILL)
-    FXButton.new(zoom_button_vertical_frame, "100%", :opts => FRAME_RAISED|LAYOUT_FILL)
-    FXButton.new(zoom_button_vertical_frame, "-", :opts => FRAME_RAISED|LAYOUT_FILL)
+    # zoom buttons
+    zoom_in_button = FXButton.new(zoom_button_vertical_frame, "+", :opts => FRAME_RAISED|LAYOUT_FILL)
+    zoom_in_button.connect(SEL_COMMAND) do
+      if @mz_to - @mz_from > 20
+        diff = (@mz_to - @mz_from)/2
+        middle = @mz_from + diff
+
+        @mz_from = middle - diff/2
+        @mz_to = middle + diff/2
+
+        read_data_and_create_spectrum
+      end
+    end
+
+
+    zoom_reset_buttom = FXButton.new(zoom_button_vertical_frame, "100%", :opts => FRAME_RAISED|LAYOUT_FILL)
+    zoom_reset_buttom.connect(SEL_COMMAND) do
+      @mz_from = nil
+      @mz_to = nil
+
+      read_data_and_create_spectrum
+    end
+
+    zoom_out_button = FXButton.new(zoom_button_vertical_frame, "-", :opts => FRAME_RAISED|LAYOUT_FILL)
+    zoom_out_button.connect(SEL_COMMAND) do
+      diff = (@mz_to - @mz_from)/2
+      middle = @mz_from + diff
+
+      @mz_from = middle - diff*2
+      @mz_to = middle + diff*2
+
+      read_data_and_create_spectrum
+    end
 
     # status bar
     status_bar = FXStatusBar.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FIX_HEIGHT, :height => 30)
@@ -131,7 +162,7 @@ class Reader < FXMainWindow
 
   def read_file(filepath)
 
-    puts "Parsing file #{filepath}"
+    print "Parsing file #{filepath} ... "
     @datapath = filepath.gsub(/imzML$/, "ibd")
     imzml_parser = ImzMLParser.new()
     @progress_message = "Parsing imzML file"
@@ -140,7 +171,7 @@ class Reader < FXMainWindow
     end
 
     @imzml = imzml_parser.metadata
-    puts "Parsing done"
+    print "done \n"
 
     read_data_and_create_spectrum
     read_data_and_create_hyperspectral_image
@@ -148,12 +179,25 @@ class Reader < FXMainWindow
 
   def read_data_and_create_spectrum
     # get spectrum min and max data
-
     @selected_spectrum = image_point_x * image_point_y
-    @mz_array = @imzml.spectrums.first.mz_array(@datapath)
-    @mz_min = @mz_array.first
-    @mz_max = @mz_array.last
+
+    @mz_array = @imzml.spectrums[@selected_spectrum].mz_array(@datapath)
+    mz_min = @mz_array.first
+    mz_max = @mz_array.last
+    default_from, default_to = 0, @mz_array.size - 1
+
+    # set default values
+    @mz_from ||= default_from
+    @mz_to ||= default_to
+
+    # check top boundaries
+    @mz_from = default_from if @mz_from < default_from
+    @mz_to = default_to if @mz_to > default_to
+
+    @mz_array = @mz_array[@mz_from..@mz_to]
+
     @intensity_array = @imzml.spectrums[@selected_spectrum].intensity_array(@datapath)
+    @intensity_array = @intensity_array[@mz_from..@mz_to]
     @intensity_max = @intensity_array.max
     @intensity_min = @intensity_array.min
 
@@ -214,75 +258,83 @@ class Reader < FXMainWindow
   end
 
   def canvas_repaint(sender, sel, event)
-    FXDCWindow.new(sender, event) do |dc|
-      case sender
-      when @spectrum_canvas
-        # draw background
-        dc.foreground = FXColor::White
-        dc.fillRectangle(event.rect.x, event.rect.y, event.rect.w, event.rect.h)
+    if sender && sel && event
+      FXDCWindow.new(sender, event) do |dc|
+        case sender
+        when @spectrum_canvas
+          # draw background
+          dc.foreground = FXColor::White
+          dc.fillRectangle(event.rect.x, event.rect.y, event.rect.w, event.rect.h)
 
-        # draw axis
-        dc.foreground = FXColor::Black
-        axis_padding = 30
-        line_indicator_height = 5
+          # draw axis
+          dc.foreground = FXColor::Black
 
-        # x axis
-        dc.drawLine(axis_padding, event.rect.h - axis_padding, event.rect.w - axis_padding, event.rect.h - axis_padding)
+          # x axis
+          dc.drawLine(AXIS_PADDING, event.rect.h - AXIS_PADDING, event.rect.w - AXIS_PADDING, event.rect.h - AXIS_PADDING)
 
-        # y axis
-        dc.drawLine(axis_padding, event.rect.h - axis_padding, axis_padding, axis_padding)
+          # y axis
+          dc.drawLine(AXIS_PADDING, event.rect.h - AXIS_PADDING, AXIS_PADDING, AXIS_PADDING)
 
-        dc.font = @font
-        dc.drawText(axis_padding/2, event.rect.h - axis_padding/2, "0")
+          dc.font = @font
+          dc.drawText(AXIS_PADDING/2, event.rect.h - AXIS_PADDING, "0")
 
-        # draw line only when sent event is correct
-        if (@imzml && event.rect.w > axis_padding && event.rect.h > axis_padding)
+          # draw line only when sent event is correct
+          if (@imzml && event.rect.w > AXIS_PADDING && event.rect.h > AXIS_PADDING)
 
-          # axis dimensions
-          x_axis_width = event.rect.w - 2 * axis_padding
-          x_point_size = x_axis_width / @mz_max
-          y_axis_height = event.rect.h - 2 * axis_padding
-          y_point_size = y_axis_height / @intensity_max
-          y_baseline = event.rect.h - axis_padding - 1
+            # draw selected mz
+            # dc.lineStyle = LINE_ONOFF_DASH
+            # dc.drawLine(event.rect.w / 2, event.rect.h - AXIS_PADDING + LINE_INDICATOR_HEIGHT, event.rect.w/2, AXIS_PADDING + LINE_INDICATOR_HEIGHT)
+            # dc.lineStyle = LINE_SOLID
 
-          # draw number lines
-          dc.lineStyle = LINE_ONOFF_DASH
-          dc.drawLine(event.rect.w / 2, event.rect.h - axis_padding + line_indicator_height, event.rect.w/2, axis_padding + line_indicator_height)
-          # dc.drawLine(axis_padding - line_indicator_height, event.rect.h/2, event.rect.w - axis_padding, event.rect.h/2)
-          dc.lineStyle = LINE_SOLID
+            # axis dimensions
+            x_axis_width = event.rect.w - 2 * AXIS_PADDING
+            x_point_size = x_axis_width.to_f / (@mz_array.size - 1).to_f
+            y_axis_height = event.rect.h - 2 * AXIS_PADDING
+            y_point_size = y_axis_height / @intensity_max
+            y_baseline = event.rect.h - AXIS_PADDING - 1
 
-          # draw mz numbers
-          dc.drawText(event.rect.w / 2, event.rect.h - axis_padding/2, (@mz_max/2).round(2).to_s)
-          dc.drawText(event.rect.w - 2 * axis_padding, event.rect.h - axis_padding/2, @mz_max.round(2).to_s)
 
-          # draw intensitu numbers
-          dc.drawText(0, event.rect.h/2, (@intensity_max/2).round(2).to_s)
-          dc.drawText(0, axis_padding + axis_padding/2, @intensity_max.round(2).to_s)
 
-          # map spectrum points to canvas
-          points = @mz_array.zip(@intensity_array).map{|coords| FXPoint.new(axis_padding + (coords[0]*x_point_size).to_i, y_baseline - (coords[1] * y_point_size).to_i)}
+            # draw mz numbers
+            dc.drawText(AXIS_PADDING, event.rect.h - AXIS_PADDING/2, @mz_array.first.round(2).to_s)
+            dc.drawText(event.rect.w / 2, event.rect.h - AXIS_PADDING/2, (@mz_array[@mz_array.size/2]).round(2).to_s)
+            dc.drawText(event.rect.w - 2 * AXIS_PADDING, event.rect.h - AXIS_PADDING/2, @mz_array.last.round(2).to_s)
 
-          # draw spectrum line
-          dc.foreground = FXColor::Red
-          dc.drawLines(points)
+            # draw intensitu numbers
+            dc.drawText(5, event.rect.h/2, (@intensity_max/2).round(2).to_s)
+            dc.drawText(5, AXIS_PADDING + AXIS_PADDING/2, @intensity_max.round(2).to_s)
+
+            # map spectrum points to canvas
+            i = 0.0
+            points = @mz_array.zip(@intensity_array).map do |coords|
+              # x_point = AXIS_PADDING + 1 + (coords[0] * x_point_size).to_i
+              x_point = (AXIS_PADDING + 1 + i).to_i
+              y_point = y_baseline - (coords[1] * y_point_size).to_i
+              i += x_point_size
+              FXPoint.new(x_point, y_point)
+            end
+            # draw spectrum line
+            dc.foreground = FXColor::Red
+            dc.drawLines(points)
+          end
+        when @image_canvas
+
+          # clear canvas
+          dc.foreground = FXColor::White
+          dc.fillRectangle(0, 0, @image_canvas.width, @image_canvas.height)
+
+          # draw image
+          if @image
+            dc.drawImage(@image, 0, 0)
+          end
+
+          # draw cross
+          dc.foreground = FXColor::Green
+          dc.drawLine(@selected_x, 0, @selected_x, event.rect.h)
+          dc.drawLine(0, @selected_y, event.rect.w, @selected_y)
+          @status_line.normalText = "Selected point #{image_point_x}x#{image_point_y}"
+          @status_line.text = @status_line.normalText
         end
-      when @image_canvas
-
-        # clear canvas
-        dc.foreground = FXColor::White
-        dc.fillRectangle(0, 0, @image_canvas.width, @image_canvas.height)
-
-        # draw image
-        if @image
-          dc.drawImage(@image, 0, 0)
-        end
-
-        # draw cross
-        dc.foreground = FXColor::Green
-        dc.drawLine(@selected_x, 0, @selected_x, event.rect.h)
-        dc.drawLine(0, @selected_y, event.rect.w, @selected_y)
-        @status_line.normalText = "Selected point #{image_point_x}x#{image_point_y}"
-        @status_line.text = @status_line.normalText
       end
     end
   end
