@@ -1,7 +1,10 @@
 require 'rubygems'
 require 'fox16'
 require 'fox16/colors'
+require 'debugger'
 require './imzml'
+require './ox'
+
 
 include Fox
 
@@ -14,11 +17,8 @@ class Reader < FXMainWindow
   ROUND_DIGITS = 4
 
   def initialize(app)
-    super(app, "imzML Reader", :width => 600, :height => 600)
+    super(app, "imzML Reader", :width => 800, :height => 600)
     add_menu_bar
-
-    @imzml = nil
-    @font = FXFont.new(app, "times")
 
     # progress dialog
     @progress_dialog = FXProgressDialog.new(self, "Please wait", "Loading data")
@@ -28,9 +28,51 @@ class Reader < FXMainWindow
       end
     end
 
+    @main_frame = FXVerticalFrame.new(self, :opts => LAYOUT_FILL)
+
+    # create main UI parts
+    add_image_part
+    add_spectrum_part
+
+    # status bar
+    status_bar = FXStatusBar.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FIX_HEIGHT, :height => 30)
+    @status_line = status_bar.statusLine
+
+    # prepare resources
+    add_resources
+  end
+
+  def add_menu_bar
+    menu_bar = FXMenuBar.new(self, LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
+
+    # file menu
+    file_menu = FXMenuPane.new(self)
+    FXMenuTitle.new(menu_bar, "File", :popupMenu => file_menu)
+
+    # open file menu
+    FXMenuCommand.new(file_menu, "Open...").connect(SEL_COMMAND) do
+      dialog = FXFileDialog.new(self, "Open imzML file")
+      dialog.directory = "#{DEFAULT_DIR}"
+      dialog.patternList = ["imzML files (*.imzML)"]
+
+      # after success on opening
+      if (dialog.execute != 0)
+
+        # show progress dialog and starts thread
+        run_on_background(3) do
+          read_file(dialog.filename)
+        end
+
+      end
+    end
+
+    exit_cmd = FXMenuCommand.new(file_menu, "Exit")
+    exit_cmd.connect(SEL_COMMAND) {exit}
+  end
+
+  def add_image_part
     # hyperspectral image
-    vertical_frame = FXVerticalFrame.new(self, :opts => LAYOUT_FILL)
-    top_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X)
+    top_horizontal_frame = FXHorizontalFrame.new(@main_frame, :opts => LAYOUT_FILL_X)
 
     image_container = FXPacker.new(top_horizontal_frame, :opts => FRAME_SUNKEN|LAYOUT_FIX_WIDTH|LAYOUT_FIX_HEIGHT, :width => IMAGE_WIDTH, :height => IMAGE_HEIGHT)
     @image_canvas = FXCanvas.new(image_container, :opts => LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL)
@@ -59,7 +101,7 @@ class Reader < FXMainWindow
 
         @mz_from = @mz_to = nil
 
-        read_data_and_create_spectrum
+        create_spectrum
       end
     end
 
@@ -80,7 +122,7 @@ class Reader < FXMainWindow
         sender.text = @selected_mz.round(ROUND_DIGITS).to_s
 
         run_on_background do
-          read_data_and_create_hyperspectral_image
+          create_image
         end
       end
     end
@@ -91,13 +133,15 @@ class Reader < FXMainWindow
         @spectrum_canvas.update
 
         run_on_background do
-          read_data_and_create_hyperspectral_image
+          create_image
         end
       end
     end
+  end
 
+  def add_spectrum_part
     # spectrum part
-    bottom_horizontal_frame = FXHorizontalFrame.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
+    bottom_horizontal_frame = FXHorizontalFrame.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
 
     @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
     @spectrum_canvas.connect(SEL_PAINT, method(:draw_canvas))
@@ -143,7 +187,7 @@ class Reader < FXMainWindow
         # remove selectiong frame
         @zoom_to_x = @zoom_from_x = nil
 
-        read_data_and_create_spectrum
+        create_spectrum
       end
     end
     @spectrum_canvas.connect(SEL_RIGHTBUTTONPRESS) do |sender, sel, event|
@@ -159,7 +203,7 @@ class Reader < FXMainWindow
         @mz_textfield.text = @selected_mz.round(ROUND_DIGITS).to_s if !@selected_mz.nil?
 
         run_on_background do
-          read_data_and_create_hyperspectral_image
+          create_image
         end
       end
     end
@@ -176,7 +220,7 @@ class Reader < FXMainWindow
         @mz_from = middle - diff/2
         @mz_to = middle + diff/2
 
-        read_data_and_create_spectrum
+        create_spectrum
       end
     end
 
@@ -185,7 +229,7 @@ class Reader < FXMainWindow
       @mz_from = nil
       @mz_to = nil
 
-      read_data_and_create_spectrum
+      create_spectrum
     end
 
     zoom_out_button = FXButton.new(zoom_button_vertical_frame, "-", :opts => FRAME_RAISED|LAYOUT_FILL)
@@ -196,19 +240,18 @@ class Reader < FXMainWindow
       @mz_from = middle - diff*2
       @mz_to = middle + diff*2
 
-      read_data_and_create_spectrum
+      create_spectrum
     end
+  end
 
-    # status bar
-    status_bar = FXStatusBar.new(vertical_frame, :opts => LAYOUT_FILL_X|LAYOUT_FIX_HEIGHT, :height => 30)
-    # status_bar.cornerStyle = true
-    @status_line = status_bar.statusLine
+  def add_resources
+    @font = FXFont.new(app, "times")
   end
 
   def create
     super
 
-    @font.create
+    create_resources
     reset_to_default_values
 
     show(PLACEMENT_SCREEN)
@@ -219,105 +262,11 @@ class Reader < FXMainWindow
     end
   end
 
-  def add_menu_bar
-    menu_bar = FXMenuBar.new(self, LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
-
-    # file menu
-    file_menu = FXMenuPane.new(self)
-    FXMenuTitle.new(menu_bar, "File", :popupMenu => file_menu)
-
-    # open file menu
-    FXMenuCommand.new(file_menu, "Open...").connect(SEL_COMMAND) do
-      dialog = FXFileDialog.new(self, "Open imzML file")
-      dialog.directory = "#{DEFAULT_DIR}"
-      dialog.patternList = ["imzML files (*.imzML)"]
-
-      # after success on opening
-      if (dialog.execute != 0)
-
-        # show progress dialog and starts thread
-        run_on_background(3) do
-          read_file(dialog.filename)
-        end
-
-      end
-    end
-
-    exit_cmd = FXMenuCommand.new(file_menu, "Exit")
-    exit_cmd.connect(SEL_COMMAND) {exit}
+  def create_resources
+    @font.create
   end
 
-  def run_on_background(operations_count = 1)
-    @progress_dialog.progress = 0
-    @progress_dialog.total = operations_count
-    Thread.new {
-      yield
-    }
-    @progress_dialog.execute(PLACEMENT_OWNER)
-  end
-
-  def log(message = "Please wait")
-    start = Time.now
-
-    message = "#{message} ... "
-    @progress_dialog.message = message
-    print message
-    yield
-    print "#{Time.now - start}s\n"
-  end
-
-  def reset_to_default_values
-    @selected_x, @selected_y = 0, 0
-    @scale_x, @scale_y = 1, 1
-    @selected_spectrum = 0
-    @selected_mz = nil
-    @selected_interval = 0
-    @selected_interval_low = @selected_interval_high = nil
-
-    @interval_textfield.text = @selected_interval.to_s
-  end
-
-  def image_point_x
-    (@selected_x/@scale_x).to_i + 1
-  end
-
-  def image_point_y
-    (@selected_y/@scale_y).to_i + 1
-  end
-
-  def calculate_interval_indexes
-    if @selected_interval && @selected_mz
-
-      # find the closest interval values
-      @selected_interval_low = @mz_array.index{|x| x >= @selected_mz - @selected_interval}
-      @selected_interval_high = @mz_array.index{|x| x >= @selected_mz + @selected_interval}
-      @spectrum_canvas.update
-    end
-  end
-
-  def read_file(filepath)
-
-    reset_to_default_values
-
-    log("Parsing imzML file") do
-      @filename = filepath.split("/").last
-      self.title = @filename
-      @datapath = filepath.gsub(/imzML$/, "ibd")
-      imzml_parser = ImzMLParser.new()
-      File.open(filepath, 'r') do |f|
-        Ox.sax_parse(imzml_parser, f)
-      end
-
-      @imzml = imzml_parser.metadata
-    end
-
-    @progress_dialog.increment(1)
-
-    read_data_and_create_spectrum
-    read_data_and_create_hyperspectral_image
-  end
-
-  def read_data_and_create_spectrum
+  def create_spectrum
 
     log("Reading spectrum data") do
 
@@ -352,7 +301,7 @@ class Reader < FXMainWindow
     @spectrum_canvas.update
   end
 
-  def read_data_and_create_hyperspectral_image
+  def create_image
 
     log("Creating hyperspectral image") do
 
@@ -365,7 +314,7 @@ class Reader < FXMainWindow
       else
         scale_w = image.width.to_f/image.height.to_f * IMAGE_WIDTH
       end
-      image.pixels = image_data
+      image.pixels = create_image_pixels
       @scale_x, @scale_y = scale_h/image.height, scale_w/image.width
       image.scale(scale_w - 10, scale_h - 10)
       image.create
@@ -379,43 +328,79 @@ class Reader < FXMainWindow
     @image_canvas.update
   end
 
-  def image_data
+  def reset_to_default_values
+    @imzml = nil
+    @selected_x, @selected_y = 0, 0
+    @scale_x, @scale_y = 1, 1
+    @selected_spectrum = 0
+    @selected_mz = nil
+    @selected_interval = 0
+    @selected_interval_low = @selected_interval_high = nil
+
+    @interval_textfield.text = @selected_interval.to_s
+  end
+
+  def image_point_x
+    (@selected_x/@scale_x).to_i + 1
+  end
+
+  def image_point_y
+    (@selected_y/@scale_y).to_i + 1
+  end
+
+  def calculate_interval_indexes
+    if @selected_interval && @selected_mz
+
+      # find the closest interval values
+      @selected_interval_low = @mz_array.index{|x| x >= @selected_mz - @selected_interval}
+      @selected_interval_high = @mz_array.index{|x| x >= @selected_mz + @selected_interval}
+      @spectrum_canvas.update
+    end
+  end
+
+  def read_file(filepath)
+
+    reset_to_default_values
+
+    log("Parsing imzML file") do
+
+      @filename = filepath.split("/").last
+      self.title = @filename
+      @datapath = filepath.gsub(/imzML$/, "ibd")
+      imzml_parser = ImzMLParser.new()
+      File.open(filepath, 'r') do |f|
+        Ox.sax_parse(imzml_parser, f)
+      end
+
+      @imzml = imzml_parser.metadata
+    end
+
+    @progress_dialog.increment(1)
+
+    create_spectrum
+    create_image
+  end
+
+  def create_image_pixels
 
     @progress_dialog.total += @imzml.spectrums.size
     data = @imzml.image_data(@datapath, @selected_mz, @selected_interval) do |id|
       @progress_dialog.increment(1)
     end
-
-    # row, column, i = 0, 0, 0
-    # direction_right = true
-
-    # FIXME sometimes there is nil in data array
+    
+    
+    # remve nil values
+    data.map{|x| x.nil? ? 0 :x}
+    
+    # normalize value into greyscale
     max_normalized = data.max - data.min
     max_normalized = 1 if max_normalized == 0
     min = data.min
     step = 255.0 / max_normalized
-
     data.map do |i|
       value = (step * (i - min)).to_i
-      # puts "Color value for #{i} is (#{value}, #{value}, #{value})}"
       FXRGB(value, value, value)
     end
-
-    # data.each do |value|
-    #   # p value
-    #   # p "#{column}, #{row}"
-    #   color_value = step * (value - min)
-    #   f[column, row] = FXRGB(color_value.to_i, color_value.to_i, color_value.to_i)
-    #   direction_right ? column += 1 : column -= 1
-    #
-    #   if (column >= @pixel_count_x || column < 0)
-    #     row += 1
-    #
-    #     direction_right = (row % 2 == 0)
-    #     # direction_right = true
-    #     direction_right ? column = 0 : column -= 1
-    #   end
-    # end
 
   end
 
@@ -521,6 +506,27 @@ class Reader < FXMainWindow
         end
       end
     end
+  end
+
+  private
+
+  def run_on_background(operations_count = 1)
+    @progress_dialog.progress = 0
+    @progress_dialog.total = operations_count
+    Thread.new {
+      yield
+    }
+    @progress_dialog.execute(PLACEMENT_OWNER)
+  end
+
+  def log(message = "Please wait")
+    start = Time.now
+
+    message = "#{message} ... "
+    @progress_dialog.message = message
+    print message
+    yield
+    print "#{Time.now - start}s\n"
   end
 
 end

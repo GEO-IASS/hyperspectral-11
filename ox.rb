@@ -1,4 +1,7 @@
 require 'ox'
+require './imzml'
+require './spectrum'
+require './obo'
 
 class ImzMLParser < ::Ox::Sax
 
@@ -29,10 +32,7 @@ class ImzMLParser < ::Ox::Sax
 
   def attr(name, str)
 
-    # p "attr #{name}=#{str}"
-
     case name
-
     when :ref
       if @in_referenceable_param_group_ref
         case str
@@ -41,7 +41,6 @@ class ImzMLParser < ::Ox::Sax
         end
       end
     when :id
-
       if @in_spectrum
         @spectrum.id = str
       end
@@ -52,7 +51,6 @@ class ImzMLParser < ::Ox::Sax
         when "intensityArray" then @in_intensity_array = true
         end
       end
-
     when :accession then @accession_attribute = str
     when :value
 
@@ -65,25 +63,39 @@ class ImzMLParser < ::Ox::Sax
         when IMZML::OBO::IMS::MAX_COUNT_OF_PIXELS_Y then @metadata.pixel_count_y = value.to_i
         when IMZML::OBO::IMS::PIXEL_SIZE then @metadata.pixel_size_x = 1 # FIXME not used properly value.to_i
         when IMZML::OBO::IMS::IMAGE_SHAPE then @metadata.pixel_size_y = 1 # value.to_i # FIXME probably error in obo definition file, should be pixel size y
+        # when IMZML::OBO::IMS::LINESCAN_SEQUENCE_BOTTOM_UP then @metadata.linescan_sequence = accession.to_s
+        # when IMZML::OBO::IMS::LINESCAN_SEQUENCE_BOTTOM_UP then @metadata.linescan_sequence = accession.to_s
+        # when IMZML::OBO::IMS::LINESCAN_SEQUENCE_TOP_DOWN then @metadata.linescan_sequence = accession.to_s
+        # when IMZML::OBO::IMS::LINESCAN_SEQUENCE_LEFT_RIGHT then @metadata.linescan_sequence = accession.to_s
+        # when IMZML::OBO::IMS::LINESCAN_SEQUENCE_RIGHT_LEFT then @metadata.linescan_sequence = accession.to_s
+        # when IMZML::OBO::IMS::LINESCAN_SEQUENCE_NO_DIRECTION then @metadata.linescan_sequence = accession.to_s
+        # when IMZML::OBO::IMS::SCAN_PATTERN_MEANDERING then @metadata.scan_pattern = accession.to_s
+        # when IMZML::OBO::IMS::SCAN_PATTERN_RANDOM_ACCESS then @metadata.scan_pattern = accession.to_s
+        # when IMZML::OBO::IMS::SCAN_PATTERN_FLYBACK then @metadata.scan_pattern = accession.to_s
+        # when IMZML::OBO::IMS::SCAN_TYPE_HORIZONTAL_LINE_SCAN then @metadata.scan_type = accession.to_s
+        # when IMZML::OBO::IMS::SCAN_TYPE_VERTICAL_LINE_SCAN then @metadata.scan_type = accession.to_s
+        # when IMZML::OBO::IMS::LINE_SCAN_DIRECTION_LINESCAN_RIGHT_LEFT then @metadata.line_scan_direction = accession.to_s
+        # when IMZML::OBO::IMS::LINE_SCAN_DIRECTION_LINESCAN_LEFT_RIGHT then @metadata.line_scan_direction = accession.to_s
         end
-
+      end
+      
+      if @in_spectrum && @in_scan_list && @in_scan
+        case accession
+        when IMZML::OBO::IMS::SPECTRUM_POSITION_X then @current_position_x = value.to_i - 1
+        when IMZML::OBO::IMS::SPECTRUM_POSITION_Y then @current_position_y = value.to_i - 1
+        end
       end
 
       if @in_referenceable_param_group && @in_reference_param_group_list
-
         if accession == IMZML::OBO::MS::FLOAT_32_BIT
-
           # p case
           # when @in_mz_array then ">> MZ array"
           # when @in_intensity_array then ">> Intensity array"
           # end
-
         end
-
       end
 
       if @in_file_description && @in_file_content
-
         case accession
         when IMZML::OBO::IMS::UNIVERSALLY_UNIQUE_IDENTIFIER
           uuid = value.delete("{}-")
@@ -91,11 +103,9 @@ class ImzMLParser < ::Ox::Sax
         when IMZML::OBO::IMS::CONTINUOUS then @metadata.saving_type = accession
         when IMZML::OBO::IMS::PROCESSED then @metadata.saving_type = accession
         end
-
       end
 
       if @in_spectrum_list && @in_spectrum && @in_binary_data_array_list
-
         type = "mz" if @in_mz_array
         type = "intensity" if @in_intensity_array
 
@@ -106,7 +116,6 @@ class ImzMLParser < ::Ox::Sax
         when IMZML::OBO::IMS::EXTERNAL_OFFSET then @spectrum.send("#{type}_array_external_offset=", value)
         when IMZML::OBO::IMS::EXTERNAL_ENCODED_LENGTH then @spectrum.send("#{type}_array_external_encoded_length=", value)
         end
-
       end
 
     end
@@ -125,7 +134,9 @@ class ImzMLParser < ::Ox::Sax
       @spectrum = IMZML::Spectrum.new
 
     when :spectrumList then @in_spectrum_list = true
+    when :scanList then @in_scan_list = true
     when :scanSettings then @in_scan_settings = true
+    when :scan then @in_scan = true
     when :fileDescription then @in_file_description = true
     when :fileContent then @in_file_content = true
     when :referenceableParamGroupList then @in_reference_param_group_list = true
@@ -158,10 +169,20 @@ class ImzMLParser < ::Ox::Sax
 
       end
 
-      @metadata.spectrums << @spectrum
+      # create new empty array
+      @metadata.spectrums = Array.new(@metadata.pixel_count_x * @metadata.pixel_count_y) if !@metadata.spectrums
+
+      # save spectrum data to the right position
+      position = @metadata.pixel_count_x * @current_position_y + @current_position_x
+      @metadata.spectrums[position] = @spectrum
+      
+      # reset positions
+      @current_position_x, @current_position_y = nil, nil
 
     when :spectrumList then @in_spectrum_list = false
     when :scanSettings then @in_scan_settings = false
+    when :scanList then @in_scan_list = false
+    when :scan then @in_scan = false
     when :fileDescription then @in_file_description = false
     when :fileContent then @in_file_content = false
     when :referenceableParamGroupList then @in_reference_param_group_list = false
