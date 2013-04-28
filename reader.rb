@@ -97,7 +97,6 @@ class Reader < FXMainWindow
     @image_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
       if @mouse_right_down
         @mouse_right_down = false
-        @status_line.text = "Reading spectrum at #{image_point_x}x#{image_point_y}"
 
         @mz_from = @mz_to = nil
 
@@ -258,7 +257,9 @@ class Reader < FXMainWindow
 
     # FIXME debug
     run_on_background do
-      read_file("/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML")
+      # read_file("/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML")
+      read_file("/Users/beny/Dropbox/School/dp/imzML/s043_processed/S043_Processed.imzML")
+      
     end
   end
 
@@ -271,7 +272,7 @@ class Reader < FXMainWindow
     log("Reading spectrum data") do
 
       # get spectrum min and max data
-      @selected_spectrum = (image_point_y - 1) * @imzml.pixel_count_x + (image_point_x - 1)
+      @selected_spectrum = (((@selected_y/@scale_y).to_i + 1) - 1) * @imzml.pixel_count_x + (((@selected_x/@scale_x).to_i + 1) - 1)
 
       @mz_array = @imzml.spectrums[@selected_spectrum].mz_array(@datapath)
       mz_min = @mz_array.first
@@ -340,14 +341,6 @@ class Reader < FXMainWindow
     @interval_textfield.text = @selected_interval.to_s
   end
 
-  def image_point_x
-    (@selected_x/@scale_x).to_i + 1
-  end
-
-  def image_point_y
-    (@selected_y/@scale_y).to_i + 1
-  end
-
   def calculate_interval_indexes
     if @selected_interval && @selected_mz
 
@@ -363,7 +356,7 @@ class Reader < FXMainWindow
     reset_to_default_values
 
     log("Parsing imzML file") do
-
+      
       @filename = filepath.split("/").last
       self.title = @filename
       @datapath = filepath.gsub(/imzML$/, "ibd")
@@ -459,6 +452,9 @@ class Reader < FXMainWindow
             # draw selected mz
             if @selected_mz && @selected_mz >= @mz_array.first && @selected_mz <= @mz_array.last
               index = @mz_array.index(@selected_mz)
+              
+              raise "Selected index is not in this spectrum" if index.nil?
+              
               line_x = AXIS_PADDING + index * @x_point_size
               dc.foreground = FXColor::Blue
 
@@ -500,7 +496,6 @@ class Reader < FXMainWindow
             dc.foreground = FXColor::Green
             dc.drawLine(@selected_x, 0, @selected_x, sender.height)
             dc.drawLine(0, @selected_y, sender.width, @selected_y)
-            @status_line.normalText = "Image point #{image_point_x}x#{image_point_y}"
             @status_line.text = @status_line.normalText
           end
         end
