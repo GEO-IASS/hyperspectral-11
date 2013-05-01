@@ -18,15 +18,12 @@ module IMZML
 
     def image_data(data_path, mz_value, interval)
       
-      # PerfTools::CpuProfiler.start("/tmp/finding_intensities") do
-
       data = Array.new
       @spectrums.each do |spectrum|
         data << spectrum.intensity(data_path, mz_value, interval)
         yield spectrum.id
       end
-      
-      # end
+
       data
     end
 
