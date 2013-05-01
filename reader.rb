@@ -15,6 +15,8 @@ class Reader < FXMainWindow
   IMAGE_WIDTH = 300
   IMAGE_HEIGHT = 300
   AXIS_PADDING = 30
+  LABEL_X_EVERY = 10
+  LABEL_Y_EVERY = 4
   DEFAULT_DIR = "../imzML/"
   DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
   # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Processed.imzML"
@@ -413,10 +415,7 @@ class Reader < FXMainWindow
           # x and y axis
           dc.drawLine(AXIS_PADDING, sender.height - AXIS_PADDING, sender.width - AXIS_PADDING, sender.height - AXIS_PADDING)
           dc.drawLine(AXIS_PADDING, sender.height - AXIS_PADDING, AXIS_PADDING, AXIS_PADDING)
-
-          # y axis description
           dc.font = @font
-          dc.drawText(AXIS_PADDING/2, sender.height - AXIS_PADDING, "0")
 
           if @visible_spectrum
             
@@ -433,19 +432,45 @@ class Reader < FXMainWindow
             labels = Array.new
             visible_spectrum = @visible_spectrum.to_a
             
-            debugger if visible_spectrum.last.nil? || visible_spectrum.first.nil? # FIXME
-            every_n = (visible_spectrum.last.first - visible_spectrum.first.first) / 10
-            i = visible_spectrum.first.first
-            @visible_spectrum.each_with_index do |item, index| 
+            # FIXME
+            debugger if visible_spectrum.last.nil? || visible_spectrum.first.nil? 
+            
+            every_x = (visible_spectrum.last.first - visible_spectrum.first.first) / LABEL_X_EVERY
+            every_y = (@visible_spectrum.values.max - @visible_spectrum.values.min) / LABEL_Y_EVERY
+            i, j = visible_spectrum.first.first, visible_spectrum.first.last
+            @visible_spectrum.each_with_index do |item, index|
+              
+              # x labels
               if (item.first > i)
                 point = spectrum_point_to_canvas(item)
                 text = item.first.round(3).to_s
                 text_width = @font.getTextWidth(text)
                 
-                dc.drawLine(point.first.to_i, @spectrum_canvas.height - AXIS_PADDING - 3, point.first.to_i, @spectrum_canvas.height - AXIS_PADDING + 3)
+                dc.drawLine(point.first.to_i, @spectrum_canvas.height - AXIS_PADDING + 3, point.first.to_i, @spectrum_canvas.height - AXIS_PADDING)
                 dc.drawText(point.first.to_i - text_width/2, @spectrum_canvas.height - AXIS_PADDING / 2, text)
-                i += every_n
+                i += every_x
               end
+              
+              # y labels
+              if (item.last > j)
+                
+                point = spectrum_point_to_canvas(item)
+                text = item.last.round(1).to_s
+                text_width = @font.getTextWidth(text)
+                text_height = @font.getTextHeight(text)
+                
+                dc.drawLine(AXIS_PADDING - 3, point.last.to_i, AXIS_PADDING, point.last.to_i)
+                dc.drawText(AXIS_PADDING - text_width - 3, point.last.to_i + text_height/2, text)
+              
+                j += every_y
+              end
+            end
+            
+            # draw y labels
+            every_n = 
+            i = visible_spectrum.first.first
+            @visible_spectrum.each_with_index do |item, index| 
+              
             end
             
             # draw spectrum
@@ -590,6 +615,8 @@ class Reader < FXMainWindow
     y_axis_height = @spectrum_canvas.height - 2 * AXIS_PADDING
 
     # calculate one point size for x and y
+    # FIXME
+    debugger if @spectrum_max_x.nil? || @spectrum_min_x.nil?
     x_diff = @spectrum_max_x - @spectrum_min_x
     x_point_size = x_axis_width / x_diff
     y_diff = @spectrum_max_y - @spectrum_min_y
