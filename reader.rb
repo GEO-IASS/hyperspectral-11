@@ -28,6 +28,7 @@ class Reader < FXMainWindow
 
     # progress dialog
     @progress_dialog = FXProgressDialog.new(self, "Please wait", "Loading data")
+    @progress_dialog.total = 0
     @progress_dialog.connect(SEL_UPDATE) do |sender, sel, event|
       if sender.progress >= sender.total
         sender.handle(sender, MKUINT(FXDialogBox::ID_ACCEPT, SEL_COMMAND), nil)
@@ -65,7 +66,7 @@ class Reader < FXMainWindow
       if (dialog.execute != 0)
 
         # show progress dialog and starts thread
-        run_on_background(3) do
+        run_on_background do
           read_file(dialog.filename)
         end
 
@@ -116,6 +117,7 @@ class Reader < FXMainWindow
     matrix.numRows = 2
     FXLabel.new(matrix, "m/z value", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
     FXLabel.new(matrix, "interval value", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
+    # FXLabel.new(matrix, "spectrum", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
     @mz_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL)
     @mz_textfield.connect(SEL_COMMAND) do |sender, sel, event|
       if sender.text.size > 0
@@ -300,7 +302,7 @@ class Reader < FXMainWindow
   end
 
   def create_average_spectrum
-    log("Creating average spectrum") do
+    log("Calculating average spectrum") do
 
       dictionary = Hash.new
       sum = @imzml.spectrums.size
@@ -325,6 +327,7 @@ class Reader < FXMainWindow
         # save average spectrum
         @spectrum = dictionary
         @visible_spectrum = dictionary.dup
+        @average_spectrum = dictionary.dup
         @progress_dialog.increment(1)
       end
       
@@ -334,10 +337,8 @@ class Reader < FXMainWindow
       end
       
       update_visible_spectrum
-
     end
-
-    @spectrum_canvas.update
+    
   end
 
   def create_resources
@@ -430,17 +431,20 @@ class Reader < FXMainWindow
             
             # draw labels
             labels = Array.new
-            every_n = ((@spectrum_max_x - @spectrum_min_x) / 14).to_i
-            i = 1
+            visible_spectrum = @visible_spectrum.to_a
+            
+            debugger if visible_spectrum.last.nil? || visible_spectrum.first.nil? # FIXME
+            every_n = (visible_spectrum.last.first - visible_spectrum.first.first) / 10
+            i = visible_spectrum.first.first
             @visible_spectrum.each_with_index do |item, index| 
-              if (item.first / i > every_n)
+              if (item.first > i)
                 point = spectrum_point_to_canvas(item)
-                text = item.first.round.to_s
+                text = item.first.round(3).to_s
                 text_width = @font.getTextWidth(text)
                 
                 dc.drawLine(point.first.to_i, @spectrum_canvas.height - AXIS_PADDING - 3, point.first.to_i, @spectrum_canvas.height - AXIS_PADDING + 3)
                 dc.drawText(point.first.to_i - text_width/2, @spectrum_canvas.height - AXIS_PADDING / 2, text)
-                i += 1
+                i += every_n
               end
             end
             
@@ -494,6 +498,8 @@ class Reader < FXMainWindow
     @selected_interval_low = @selected_interval_high = nil
 
     @interval_textfield.text = @selected_interval.to_s
+    
+    @progress_dialog.total = 0
   end
 
   def read_file(filepath)
@@ -513,10 +519,10 @@ class Reader < FXMainWindow
       imzml = imzml_parser.metadata
       @imzml = imzml
       
-      create_average_spectrum
     end
+    
+    create_average_spectrum
 
-    @progress_dialog.increment(1)
   end
   
   def update_visible_spectrum
@@ -534,12 +540,13 @@ class Reader < FXMainWindow
       # reset zoom values
       @zoom_from = @zoom_to = nil
       
-      @spectrum_canvas.update
     end
     
     # find min max values
     @spectrum_min_x, @spectrum_max_x = @visible_spectrum.keys.min, @visible_spectrum.keys.max
     @spectrum_min_y, @spectrum_max_y = @visible_spectrum.values.min, @visible_spectrum.values.max
+    
+    @spectrum_canvas.update
   end
 
   private
@@ -556,17 +563,17 @@ class Reader < FXMainWindow
 
   def log(message = "Please wait")
     start = Time.now
-
+    @progress_dialog.total += 1
     message = "#{message} ... "
     @progress_dialog.message = message
     print message
     yield
     print "#{Time.now - start}s\n"
+    @progress_dialog.increment(1)
   end
   
-  def run_on_background(operations_count = 1)
+  def run_on_background
     @progress_dialog.progress = 0
-    @progress_dialog.total = operations_count
     Thread.new {
       yield
     }
