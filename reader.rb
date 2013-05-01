@@ -1,10 +1,12 @@
 require 'rubygems'
 require 'fox16'
 require 'fox16/colors'
-require 'debugger'
+
 require './imzml'
 require './ox'
 
+require 'debugger'
+require 'perftools'
 
 include Fox
 
@@ -14,6 +16,10 @@ class Reader < FXMainWindow
   IMAGE_HEIGHT = 300
   AXIS_PADDING = 30
   DEFAULT_DIR = "../imzML/"
+  DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
+  # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Processed.imzML"
+  # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s043_processed/S043_Processed.imzML"
+  # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/testovaci_blbost.imzML"
   ROUND_DIGITS = 4
 
   def initialize(app)
@@ -98,9 +104,7 @@ class Reader < FXMainWindow
       if @mouse_right_down
         @mouse_right_down = false
 
-        @mz_from = @mz_to = nil
-
-        create_spectrum
+        update_visible_spectrum
       end
     end
 
@@ -145,28 +149,24 @@ class Reader < FXMainWindow
     @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
     @spectrum_canvas.connect(SEL_PAINT, method(:draw_canvas))
     @spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
-      if @imzml
+      if @visible_spectrum
         @mouse_right_down = true
         @spectrum_canvas.grab
-        @zoom_from_x = event.win_x - AXIS_PADDING
-        @zoom_from_x = @x_axis_width if @zoom_from_x > @x_axis_width
-        @zoom_from_x = 0 if @zoom_from_x < 0
+        @zoom_from = canvas_point_to_spectrum([event.win_x, event.win_y])
       end
     end
     @spectrum_canvas.connect(SEL_MOTION) do |sender, sel, event|
       if @mouse_right_down
-        @zoom_to_x = event.win_x - AXIS_PADDING
-        @zoom_to_x = @x_axis_width if @zoom_to_x > @x_axis_width
-        @zoom_to_x = 0 if @zoom_to_x < 0
-        @status_line.text = "Zoom from #{@mz_array[@zoom_from_x/@x_point_size]} to #{@mz_array[@zoom_to_x/@x_point_size]}"
+        @zoom_to = canvas_point_to_spectrum([event.win_x, event.win_y])
+        @status_line.text = "Zoom from #{@zoom_from.first} to #{@zoom_to.first}"
         @spectrum_canvas.update
       elsif @mouse_left_down
-        selected_mz_x = event.win_x - AXIS_PADDING
-        selected_mz_x = @x_axis_width if selected_mz_x > @x_axis_width
-        selected_mz_x = 0 if selected_mz_x < 0
-        selected_mz_x = (selected_mz_x / @x_point_size).to_i
-        @selected_mz = @mz_array[selected_mz_x]
-        @status_line.text = "Selected MZ value #{@selected_mz}"
+    #     selected_mz_x = event.win_x - AXIS_PADDING
+    #     selected_mz_x = @x_axis_width if selected_mz_x > @x_axis_width
+    #     selected_mz_x = 0 if selected_mz_x < 0
+    #     selected_mz_x = (selected_mz_x / @x_point_size).to_i
+    #     @selected_mz = @mz_array[selected_mz_x]
+    #     @status_line.text = "Selected MZ value #{@selected_mz}"
         @spectrum_canvas.update
       end
     end
@@ -174,77 +174,115 @@ class Reader < FXMainWindow
       if @mouse_right_down
         @spectrum_canvas.ungrab
         @mouse_right_down = false
-
-        # zoom to selected values
-        from = (@zoom_to_x > @zoom_from_x) ? @zoom_from_x : @zoom_to_x
-        to = (@zoom_to_x > @zoom_from_x) ? @zoom_to_x : @zoom_from_x
-        from = @mz_from + (from/ @x_point_size).to_i
-        to = @mz_from + (to / @x_point_size).to_i
-        @mz_from = from
-        @mz_to = to
-
-        # remove selectiong frame
-        @zoom_to_x = @zoom_from_x = nil
-
-        create_spectrum
+        
+        update_visible_spectrum
       end
     end
-    @spectrum_canvas.connect(SEL_RIGHTBUTTONPRESS) do |sender, sel, event|
-      if @imzml
-        @mouse_left_down = true
-        @spectrum_canvas.grab
-      end
-    end
-    @spectrum_canvas.connect(SEL_RIGHTBUTTONRELEASE) do |sender, sel, event|
-      if @mouse_left_down
-        @spectrum_canvas.ungrab
-        @mouse_left_down = false
-        @mz_textfield.text = @selected_mz.round(ROUND_DIGITS).to_s if !@selected_mz.nil?
-
-        run_on_background do
-          create_image
-        end
-      end
-    end
+    
+    # @spectrum_canvas.connect(SEL_RIGHTBUTTONPRESS) do |sender, sel, event|
+    #   if @imzml
+    #     @mouse_left_down = true
+    #     @spectrum_canvas.grab
+    #   end
+    # end
+    # @spectrum_canvas.connect(SEL_RIGHTBUTTONRELEASE) do |sender, sel, event|
+    #   if @mouse_left_down
+    #     @spectrum_canvas.ungrab
+    #     @mouse_left_down = false
+    #     @mz_textfield.text = @selected_mz.round(ROUND_DIGITS).to_s if !@selected_mz.nil?
+    # 
+    #     run_on_background do
+    #       create_image
+    #     end
+    #   end
+    # end
 
     zoom_button_vertical_frame = FXVerticalFrame.new(bottom_horizontal_frame, :opts => LAYOUT_FIX_WIDTH|LAYOUT_FILL_Y, :width => 50)
 
     # zoom buttons
     zoom_in_button = FXButton.new(zoom_button_vertical_frame, "+", :opts => FRAME_RAISED|LAYOUT_FILL)
     zoom_in_button.connect(SEL_COMMAND) do
-      if @mz_to - @mz_from > 20
-        diff = (@mz_to - @mz_from)/2
-        middle = @mz_from + diff
-
-        @mz_from = middle - diff/2
-        @mz_to = middle + diff/2
-
-        create_spectrum
+      
+      visible_spectrum = @visible_spectrum.to_a
+      
+      # recalculate zoom in values
+      if (visible_spectrum.size > 4)
+        quarter = (visible_spectrum.last.first - visible_spectrum.first.first) / 4
+        zoom_begin = visible_spectrum.first.first + quarter
+        zoom_end = visible_spectrum.last.first - quarter
+      
+        @zoom_from = [zoom_begin, nil]
+        @zoom_to = [zoom_end, nil]
+        
+        update_visible_spectrum
       end
     end
 
     zoom_reset_buttom = FXButton.new(zoom_button_vertical_frame, "100%", :opts => FRAME_RAISED|LAYOUT_FILL)
     zoom_reset_buttom.connect(SEL_COMMAND) do
-      @mz_from = nil
-      @mz_to = nil
+      spectrum = @spectrum.to_a
+      @zoom_from = [spectrum.first.first, nil]
+      @zoom_to = [spectrum.last.first, nil]
 
-      create_spectrum
+      update_visible_spectrum
     end
 
     zoom_out_button = FXButton.new(zoom_button_vertical_frame, "-", :opts => FRAME_RAISED|LAYOUT_FILL)
     zoom_out_button.connect(SEL_COMMAND) do
-      diff = (@mz_to - @mz_from)/2
-      middle = @mz_from + diff
+      visible_spectrum = @visible_spectrum.to_a
+      spectrum = @spectrum.to_a
+      
+      # recalculate zoom out values
+      if (visible_spectrum.size > 4)
+        quarter = (visible_spectrum.last.first - visible_spectrum.first.first) / 4
+        zoom_begin = visible_spectrum.first.first - quarter
+        zoom_end = visible_spectrum.last.first + quarter
+        
+        # limit to the spectrum values
+        zoom_begin = spectrum.first.first if zoom_begin < spectrum.first.first
+        zoom_end = spectrum.last.first if zoom_end > spectrum.last.first
+      
+        @zoom_from = [zoom_begin, nil]
+        @zoom_to = [zoom_end, nil]
+        
+        update_visible_spectrum
+      end
 
-      @mz_from = middle - diff*2
-      @mz_to = middle + diff*2
-
-      create_spectrum
     end
   end
 
   def add_resources
     @font = FXFont.new(app, "times")
+  end
+
+  def canvas_point_to_spectrum(canvas_point)
+    # map points
+    x_point_origin = canvas_point.first
+    y_point_origin = canvas_point.last
+    
+    # find axis dimensions
+    x_axis_width = @spectrum_canvas.width - 2 * AXIS_PADDING
+    y_axis_height = @spectrum_canvas.height - 2 * AXIS_PADDING
+    
+    # calculate x point
+    x_point_spectrum = if x_point_origin <= AXIS_PADDING then @spectrum_min_x
+    elsif x_point_origin >= (AXIS_PADDING + x_axis_width) then @spectrum_max_x
+    else
+      x_diff = @spectrum_max_x - @spectrum_min_x
+      x_point_size = x_axis_width / x_diff
+      ((x_point_origin - AXIS_PADDING) / x_point_size) + @spectrum_min_x
+    end
+    
+    # calculate y point
+    y_point_spectrum = if y_point_origin <= AXIS_PADDING then @spectrum_max_y
+    elsif y_point_origin >= (AXIS_PADDING + y_axis_height) then @spectrum_min_y
+    else
+      y_diff = @spectrum_max_y - @spectrum_min_y
+      y_point_size = y_axis_height / y_diff.to_f
+      @spectrum_max_y - (y_point_origin - AXIS_PADDING) / y_point_size
+    end
+    
+    [x_point_spectrum, y_point_spectrum]
   end
 
   def create
@@ -257,57 +295,85 @@ class Reader < FXMainWindow
 
     # FIXME debug
     run_on_background do
-      # read_file("/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML")
-      read_file("/Users/beny/Dropbox/School/dp/imzML/s043_processed/S043_Processed.imzML")
-      
+      read_file(DEBUG_DIR)
     end
+  end
+
+  def create_average_spectrum
+    log("Creating average spectrum") do
+
+      dictionary = Hash.new
+      sum = @imzml.spectrums.size
+      
+      @progress_dialog.total += sum
+      
+      # add all values
+      @imzml.spectrums.each do |s|
+        
+        mz_array = s.mz_array(@datapath)
+        intensity_array = s.intensity_array(@datapath)
+        
+        # create data array
+        mz_array.zip(intensity_array).each do |key_value|
+          key = key_value.first
+          value = key_value.last
+          
+          dictionary[key] ||= 0
+          dictionary[key] += value
+        end
+        
+        # save average spectrum
+        @spectrum = dictionary
+        @visible_spectrum = dictionary.dup
+        @progress_dialog.increment(1)
+      end
+      
+      # divide and make average
+      dictionary.each do |key, value|
+        value /= sum
+      end
+      
+      update_visible_spectrum
+
+    end
+
+    @spectrum_canvas.update
   end
 
   def create_resources
     @font.create
   end
 
-  def create_spectrum
-
-    log("Reading spectrum data") do
-
-      # get spectrum min and max data
-      @selected_spectrum = (((@selected_y/@scale_y).to_i + 1) - 1) * @imzml.pixel_count_x + (((@selected_x/@scale_x).to_i + 1) - 1)
-
-      @mz_array = @imzml.spectrums[@selected_spectrum].mz_array(@datapath)
-      mz_min = @mz_array.first
-      mz_max = @mz_array.last
-      default_from, default_to = 0, @mz_array.size - 1
-
-      # set default values
-      @mz_from ||= default_from
-      @mz_to ||= default_to
-
-      # check top boundaries
-      @mz_from = default_from if @mz_from < default_from
-      @mz_to = default_to if @mz_to > default_to
-
-      @mz_array = @mz_array[@mz_from..@mz_to]
-
-      @intensity_array = @imzml.spectrums[@selected_spectrum].intensity_array(@datapath)
-      @intensity_array = @intensity_array[@mz_from..@mz_to]
-      @intensity_max = @intensity_array.max
-      @intensity_min = @intensity_array.min
-
-    end
-
-    calculate_interval_indexes
-
-    @progress_dialog.increment(1)
-    @spectrum_canvas.update
-  end
-
   def create_image
 
     log("Creating hyperspectral image") do
 
-      image = FXImage.new(getApp(), nil, IMAGE_KEEP|IMAGE_SHMI|IMAGE_SHMP, :width => @imzml.pixel_count_x, :height => @imzml.pixel_count_y)
+      # PerfTools::CpuProfiler.start("/tmp/getting_image_data") do
 
+      @progress_dialog.total += @imzml.spectrums.size
+      data = @imzml.image_data(@datapath, @selected_mz, @selected_interval) do |id|
+        @progress_dialog.increment(1)
+      end
+
+      # end
+
+      # remve nil values
+      data.map{|x| x.nil? ? 0 :x}
+
+      # normalize value into greyscale
+      max_normalized = data.max - data.min
+      max_normalized = 1 if max_normalized == 0
+      min = data.min
+      step = 255.0 / max_normalized
+      data.map do |i|
+        value = (step * (i - min)).to_i
+        FXRGB(value, value, value)
+      end
+
+      # create empty image
+      image = FXImage.new(getApp(), nil, IMAGE_KEEP|IMAGE_SHMI|IMAGE_SHMP, :width => @imzml.pixel_count_x, :height => @imzml.pixel_count_y)
+      
+      # rescale image and fill image view
       scale_w = IMAGE_WIDTH
       scale_h = IMAGE_HEIGHT
       if image.width > image.height
@@ -315,10 +381,12 @@ class Reader < FXMainWindow
       else
         scale_w = image.width.to_f/image.height.to_f * IMAGE_WIDTH
       end
-      image.pixels = create_image_pixels
+      image.pixels = data
       @scale_x, @scale_y = scale_h/image.height, scale_w/image.width
       image.scale(scale_w - 10, scale_h - 10)
       image.create
+      
+      # assign image
       @image = image
 
     end
@@ -328,75 +396,7 @@ class Reader < FXMainWindow
     @progress_dialog.increment(1)
     @image_canvas.update
   end
-
-  def reset_to_default_values
-    @imzml = nil
-    @selected_x, @selected_y = 0, 0
-    @scale_x, @scale_y = 1, 1
-    @selected_spectrum = 0
-    @selected_mz = nil
-    @selected_interval = 0
-    @selected_interval_low = @selected_interval_high = nil
-
-    @interval_textfield.text = @selected_interval.to_s
-  end
-
-  def calculate_interval_indexes
-    if @selected_interval && @selected_mz
-
-      # find the closest interval values
-      @selected_interval_low = @mz_array.index{|x| x >= @selected_mz - @selected_interval}
-      @selected_interval_high = @mz_array.index{|x| x >= @selected_mz + @selected_interval}
-      @spectrum_canvas.update
-    end
-  end
-
-  def read_file(filepath)
-
-    reset_to_default_values
-
-    log("Parsing imzML file") do
-      
-      @filename = filepath.split("/").last
-      self.title = @filename
-      @datapath = filepath.gsub(/imzML$/, "ibd")
-      imzml_parser = ImzMLParser.new()
-      File.open(filepath, 'r') do |f|
-        Ox.sax_parse(imzml_parser, f)
-      end
-
-      @imzml = imzml_parser.metadata
-    end
-
-    @progress_dialog.increment(1)
-
-    create_spectrum
-    create_image
-  end
-
-  def create_image_pixels
-
-    @progress_dialog.total += @imzml.spectrums.size
-    data = @imzml.image_data(@datapath, @selected_mz, @selected_interval) do |id|
-      @progress_dialog.increment(1)
-    end
-    
-    
-    # remve nil values
-    data.map{|x| x.nil? ? 0 :x}
-    
-    # normalize value into greyscale
-    max_normalized = data.max - data.min
-    max_normalized = 1 if max_normalized == 0
-    min = data.min
-    step = 255.0 / max_normalized
-    data.map do |i|
-      value = (step * (i - min)).to_i
-      FXRGB(value, value, value)
-    end
-
-  end
-
+  
   def draw_canvas(sender, sel, event)
     if sender && sel && event
       FXDCWindow.new(sender, event) do |dc|
@@ -417,68 +417,49 @@ class Reader < FXMainWindow
           dc.font = @font
           dc.drawText(AXIS_PADDING/2, sender.height - AXIS_PADDING, "0")
 
-          if @imzml
-
-            # axis dimensions
-            @x_axis_width = sender.width - 2 * AXIS_PADDING
-            @x_point_size = @x_axis_width.to_f / (@mz_array.size - 1).to_f
-            y_axis_height = sender.height - 2 * AXIS_PADDING
-            y_point_size = y_axis_height / @intensity_max
-            y_baseline = sender.height - AXIS_PADDING - 1
-
-            # draw mz numbers
-            dc.drawText(AXIS_PADDING, sender.height - AXIS_PADDING/2, @mz_array.first.round(ROUND_DIGITS).to_s)
-            center_text = (@mz_array[@mz_array.size/2]).round(ROUND_DIGITS).to_s
-            dc.drawText(sender.width / 2, sender.height - AXIS_PADDING/2, center_text)
-            dc.drawText(sender.width - 2 * AXIS_PADDING, sender.height - AXIS_PADDING/2, @mz_array.last.round(ROUND_DIGITS).to_s)
-
-            # draw intensity numbers
-            dc.drawText(5, sender.height/2, (@intensity_max/2).round(ROUND_DIGITS).to_s)
-            dc.drawText(5, AXIS_PADDING + AXIS_PADDING/2, @intensity_max.round(ROUND_DIGITS).to_s)
-
-            # map spectrum points to canvas
-            i = 0.0
-            points = @mz_array.zip(@intensity_array).map do |coords|
-              x_point = (AXIS_PADDING + 1 + i).to_i
-              y_point = y_baseline - (coords[1] * y_point_size).to_i
-              i += @x_point_size
-              FXPoint.new(x_point, y_point)
+          if @visible_spectrum
+            
+            # recalculate points
+            points = Array.new
+            
+            # draw line
+            @visible_spectrum.each do |mz, intensity|
+              point = spectrum_point_to_canvas([mz, intensity])
+              points << FXPoint.new(point.first.to_i, point.last.to_i)
             end
-
-            # draw spectrum line
+            
+            # draw labels
+            labels = Array.new
+            every_n = ((@spectrum_max_x - @spectrum_min_x) / 14).to_i
+            i = 1
+            @visible_spectrum.each_with_index do |item, index| 
+              if (item.first / i > every_n)
+                point = spectrum_point_to_canvas(item)
+                text = item.first.round.to_s
+                text_width = @font.getTextWidth(text)
+                
+                dc.drawLine(point.first.to_i, @spectrum_canvas.height - AXIS_PADDING - 3, point.first.to_i, @spectrum_canvas.height - AXIS_PADDING + 3)
+                dc.drawText(point.first.to_i - text_width/2, @spectrum_canvas.height - AXIS_PADDING / 2, text)
+                i += 1
+              end
+            end
+            
+            # draw spectrum
             dc.foreground = FXColor::Red
             dc.drawLines(points)
-
-            # draw selected mz
-            if @selected_mz && @selected_mz >= @mz_array.first && @selected_mz <= @mz_array.last
-              index = @mz_array.index(@selected_mz)
+            
+            # draw zoom rect
+            if @zoom_from && @zoom_to
+              canvas_from = spectrum_point_to_canvas(@zoom_from)
+              canvas_to = spectrum_point_to_canvas(@zoom_to)
               
-              raise "Selected index is not in this spectrum" if index.nil?
-              
-              line_x = AXIS_PADDING + index * @x_point_size
-              dc.foreground = FXColor::Blue
-
-              dc.drawLine(line_x, sender.height - AXIS_PADDING, line_x, AXIS_PADDING)
-              text =
-              dc.drawText(line_x - 5, (sender.height - AXIS_PADDING/2) + @font.getTextHeight(center_text), @selected_mz.round(ROUND_DIGITS).to_s)
-
               dc.lineStyle = LINE_ONOFF_DASH
-              # interval lines
-              if @selected_interval_low && @selected_interval_high
-                line_x = AXIS_PADDING + @selected_interval_low * @x_point_size
-                dc.drawLine(line_x, sender.height - AXIS_PADDING, line_x, AXIS_PADDING)
-                line_x = AXIS_PADDING + @selected_interval_high * @x_point_size
-                dc.drawLine(line_x, sender.height - AXIS_PADDING, line_x, AXIS_PADDING)
-              end
+              dc.foreground = FXColor::Blue
+              begining = (canvas_from.first > canvas_to.first) ? canvas_to : canvas_from
+              dc.drawRectangle(begining.first, AXIS_PADDING, (canvas_from.first - canvas_to.first).abs, @spectrum_canvas.height - 2 * AXIS_PADDING)
               dc.lineStyle = LINE_SOLID
             end
 
-            # draw zoom rect
-            if @zoom_from_x && @zoom_to_x
-              dc.foreground = FXColor::Blue
-              start_from = (@zoom_from_x > @zoom_to_x) ? @zoom_to_x : @zoom_from_x
-              dc.drawRectangle(AXIS_PADDING + start_from, AXIS_PADDING, (@zoom_from_x - @zoom_to_x).abs, sender.height - 2 * AXIS_PADDING)
-            end
           end
         when @image_canvas
 
@@ -502,16 +483,75 @@ class Reader < FXMainWindow
       end
     end
   end
+  
+  def reset_to_default_values
+    @imzml = nil
+    @selected_x, @selected_y = 0, 0
+    @scale_x, @scale_y = 1, 1
+    @selected_spectrum = 0
+    @selected_mz = nil
+    @selected_interval = 0
+    @selected_interval_low = @selected_interval_high = nil
+
+    @interval_textfield.text = @selected_interval.to_s
+  end
+
+  def read_file(filepath)
+
+    reset_to_default_values
+
+    log("Parsing imzML file") do
+      
+      @filename = filepath.split("/").last
+      self.title = @filename
+      @datapath = filepath.gsub(/imzML$/, "ibd")
+      imzml_parser = ImzMLParser.new()
+      File.open(filepath, 'r') do |f|
+        Ox.sax_parse(imzml_parser, f)
+      end
+
+      imzml = imzml_parser.metadata
+      @imzml = imzml
+      
+      create_average_spectrum
+    end
+
+    @progress_dialog.increment(1)
+  end
+  
+  def update_visible_spectrum
+    if @zoom_from && @zoom_to
+      
+      # flip values if set on other sides
+      @zoom_from, @zoom_to = @zoom_to, @zoom_from if @zoom_from.first > @zoom_to.first
+    
+      # copy original spectrum
+      @visible_spectrum = @spectrum.dup
+      
+      # delete unwanted values
+      @visible_spectrum.delete_if{ |key, value| key < @zoom_from.first || key > @zoom_to.first }
+      
+      # reset zoom values
+      @zoom_from = @zoom_to = nil
+      
+      @spectrum_canvas.update
+    end
+    
+    # find min max values
+    @spectrum_min_x, @spectrum_max_x = @visible_spectrum.keys.min, @visible_spectrum.keys.max
+    @spectrum_min_y, @spectrum_max_y = @visible_spectrum.values.min, @visible_spectrum.values.max
+  end
 
   private
 
-  def run_on_background(operations_count = 1)
-    @progress_dialog.progress = 0
-    @progress_dialog.total = operations_count
-    Thread.new {
-      yield
-    }
-    @progress_dialog.execute(PLACEMENT_OWNER)
+  def calculate_interval_indexes
+    if @selected_interval && @selected_mz
+
+      # find the closest interval values
+      @selected_interval_low = @mz_array.index{|x| x >= @selected_mz - @selected_interval}
+      @selected_interval_high = @mz_array.index{|x| x >= @selected_mz + @selected_interval}
+      @spectrum_canvas.update
+    end
   end
 
   def log(message = "Please wait")
@@ -522,6 +562,39 @@ class Reader < FXMainWindow
     print message
     yield
     print "#{Time.now - start}s\n"
+  end
+  
+  def run_on_background(operations_count = 1)
+    @progress_dialog.progress = 0
+    @progress_dialog.total = operations_count
+    Thread.new {
+      yield
+    }
+    @progress_dialog.execute(PLACEMENT_OWNER)
+  end
+
+  def spectrum_point_to_canvas(spectrum_point)
+    # map points
+    x_point_origin = spectrum_point.first
+    y_point_origin = spectrum_point.last
+    
+    # find axis dimensions
+    x_axis_width = @spectrum_canvas.width - 2 * AXIS_PADDING
+    y_axis_height = @spectrum_canvas.height - 2 * AXIS_PADDING
+
+    # calculate one point size for x and y
+    x_diff = @spectrum_max_x - @spectrum_min_x
+    x_point_size = x_axis_width / x_diff
+    y_diff = @spectrum_max_y - @spectrum_min_y
+    y_point_size = y_axis_height / y_diff.to_f
+    
+    # recalculate points
+    x_point_canvas = ((x_point_origin - @spectrum_min_x) * x_point_size) + AXIS_PADDING
+    y_point_canvas = @spectrum_canvas.height - AXIS_PADDING - (y_point_origin * y_point_size) - 1
+    
+    # p "canvas point #{y_point_origin} #{y_point_canvas}"
+    
+    [x_point_canvas, y_point_canvas]
   end
 
 end
