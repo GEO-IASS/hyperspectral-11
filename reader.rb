@@ -202,7 +202,6 @@ class Reader < FXMainWindow
       end
     end
 
-
     zoom_button_vertical_frame = FXVerticalFrame.new(bottom_horizontal_frame, :opts => LAYOUT_FIX_WIDTH|LAYOUT_FILL_Y, :width => 50)
 
     # zoom buttons
@@ -370,6 +369,11 @@ class Reader < FXMainWindow
       @image = image
 
     end
+    
+    # save selected spectrum for image
+    @selected_fixed_point = @selected_point.dup
+    @selected_fixed_interval = @selected_interval
+    @spectrum_canvas.update
 
     @image_canvas.update
   end
@@ -467,27 +471,11 @@ class Reader < FXMainWindow
               dc.lineStyle = LINE_SOLID
             end
             
+            # draw selected fixed line
+            draw_selected_line(dc, @selected_fixed_point, @selected_fixed_interval, FXColor::LightGrey)
+            
             # draw selected line
-            if @selected_point
-              dc.foreground = FXColor::SteelBlue1
-              point = spectrum_point_to_canvas(@selected_point)
-              dc.drawLine(point.first, AXIS_PADDING, point.first, sender.height - AXIS_PADDING)
-              
-              text = @selected_point.first.round(ROUND_DIGITS).to_s
-              text_width = @font.getTextWidth(text)
-              text_height = @font.getTextHeight(text)
-              dc.drawText(point.first - text_width/2, AXIS_PADDING - 3, text)
-              
-              # draw interval
-              if @selected_interval > 0
-                interval_from = spectrum_point_to_canvas([@selected_point.first - @selected_interval, @selected_point.last])
-                interval_to = spectrum_point_to_canvas([@selected_point.first + @selected_interval, @selected_point.last])
-                
-                dc.fillStyle = FILL_STIPPLED
-                dc.stipple = STIPPLE_2
-                dc.fillRectangle(interval_from.first, AXIS_PADDING - 1, interval_to.first - interval_from.first, @spectrum_canvas.height - 2 * AXIS_PADDING)
-              end
-            end
+            draw_selected_line(dc, @selected_point, @selected_interval, FXColor::SteelBlue)
 
           end
         when @image_canvas
@@ -556,22 +544,25 @@ class Reader < FXMainWindow
   end
   
   def reset_to_default_values
+    
+    # reset calculated spectrum data
+    @average_spectrum = @spectrum = nil
     @imzml = nil
+    
+    # reset image vars
     @selected_x, @selected_y = 0, 0
     @scale_x, @scale_y = 1, 1
-    @selected_point = nil
-    @selected_interval = 0
-    @selected_interval_low = @selected_interval_high = nil
-
-    @interval_textfield.text = @selected_interval.to_s
+    @image = nil
     
+    # reset spectrum vars
+    @selected_point, @selected_interval = nil, 0
+    @selected_fixed_point, @selected_fixed_interval = nil, 0
+    
+    # reset input fields
+    @interval_textfield.text = @selected_interval.to_s
     @mz_textfield.text = "0"
     @interval_textfield.text = "0"
-    
     @tree_list_box.clearItems
-    
-    @average_spectrum = @spectrum = nil
-    @image = nil
   end
 
   def read_file(filepath)
@@ -628,6 +619,32 @@ class Reader < FXMainWindow
   end
 
   private
+  
+  def draw_selected_line(context, selected_point, selected_interval, color)
+    # draw selected line
+    if selected_point
+      point = spectrum_point_to_canvas(selected_point)
+      context.foreground = color
+      context.stipple = STIPPLE_NONE
+      context.fillStyle = FILL_SOLID
+      context.drawLine(point.first, AXIS_PADDING, point.first, @spectrum_canvas.height - AXIS_PADDING)
+      
+      text = selected_point.first.round(ROUND_DIGITS).to_s
+      text_width = @font.getTextWidth(text)
+      text_height = @font.getTextHeight(text)
+      context.drawText(point.first - text_width/2, AXIS_PADDING - 3, text)
+      
+      # draw interval
+      if selected_interval > 0
+        interval_from = spectrum_point_to_canvas([selected_point.first - selected_interval, selected_point.last])
+        interval_to = spectrum_point_to_canvas([selected_point.first + selected_interval, selected_point.last])
+        
+        context.fillStyle = FILL_STIPPLED
+        context.stipple = STIPPLE_2
+        context.fillRectangle(interval_from.first, AXIS_PADDING - 1, interval_to.first - interval_from.first, @spectrum_canvas.height - 2 * AXIS_PADDING)
+      end
+    end
+  end
 
   def log(message = "Please wait")
     start = Time.now
