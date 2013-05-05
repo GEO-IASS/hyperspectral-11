@@ -1,4 +1,6 @@
 require 'rubygems'
+require 'csv'
+
 require 'fox16'
 require 'fox16/colors'
 
@@ -17,17 +19,34 @@ class Reader < FXMainWindow
   AXIS_PADDING = 30
   LABEL_X_EVERY = 10
   LABEL_Y_EVERY = 4
+  COLUMN_DEFAULT_WIDTH = 80
   DEFAULT_DIR = "../imzML/"
-  # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
+  DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
   # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Processed.imzML"
   # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s042_continuous/S042_Continuous.imzML"
   # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s043_processed/S043_Processed.imzML"
   # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/testovaci_blbost.imzML"
+  # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/20130115_lin_range_10row_100vdef_0V_DOBRA_144327.imzML"
+  # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/calibration_files/20130503_2013_IMZML_141238.imzML"
   ROUND_DIGITS = 4
+  
+  # tabs
+  TAB_BASICS = 0
+  TAB_CALIBRATIONS = TAB_BASICS + 1
+
+  # calibration columns
+  CALIBRATION_COLUMN_SELECTED = 0
+  CALIBRATION_COLUMN_ORIGIN = CALIBRATION_COLUMN_SELECTED + 1
+  CALIBRATION_COLUMN_DIFF = CALIBRATION_COLUMN_ORIGIN + 1
+  CALIBRATION_COLUMN_PEPTID = CALIBRATION_COLUMN_DIFF + 1
 
   def initialize(app)
     super(app, "imzML Reader", :width => 800, :height => 600)
     add_menu_bar
+    
+    self.connect(SEL_CONFIGURE) do
+      @spectrum_drawn_points = nil
+    end
     
     @mutex = Mutex.new
 
@@ -59,7 +78,7 @@ class Reader < FXMainWindow
   def add_menu_bar
     menu_bar = FXMenuBar.new(self, LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
 
-    # file menu
+    # file menu (fold)
     file_menu = FXMenuPane.new(self)
     FXMenuTitle.new(menu_bar, "File", :popupMenu => file_menu)
 
@@ -78,9 +97,83 @@ class Reader < FXMainWindow
         end
       end
     end
+    
+    FXMenuSeparator.new(file_menu)
+    
+    FXMenuCommand.new(file_menu, "Save image...").connect(SEL_COMMAND) do
+      saveDialog = FXFileDialog.new(self, "Save as PNG")
+      saveDialog.patternList = ["PNG files (*.png)"]
+      if @image
+        if saveDialog.execute != 0
+          FXFileStream.open(saveDialog.filename, FXStreamSave) do |outfile|
+            image = FXPNGImage.new(getApp(), :width => @image.width, :height => @image.height)
+            image.setPixels(@image.pixels)
+            image.scale(@imzml.pixel_count_x, @imzml.pixel_count_y)
+            image.savePixels(outfile)
+          end
+        end
+      end
+    end
+    
+    FXMenuCommand.new(file_menu, "Save spectrum ...").connect(SEL_COMMAND) do
+      saveDialog = FXFileDialog.new(self, "Save as CSV")
+      saveDialog.patternList = ["CSV files (*.csv)"]
+      if @spectrum
+        if saveDialog.execute != 0
+          CSV.open(saveDialog.filename, "wb") do |csv|
+            @spectrum.each{|key, value| csv << [key, value]}
+          end
+        end
+      end
+    end
+    
+    FXMenuSeparator.new(file_menu)
 
     exit_cmd = FXMenuCommand.new(file_menu, "Exit")
     exit_cmd.connect(SEL_COMMAND) {exit}
+    # file menu (end)
+    
+    # calibration menu (fold)
+    calibration_menu = FXMenuPane.new(self)
+    FXMenuTitle.new(menu_bar, "Calibration", :popupMenu => calibration_menu)
+    
+    FXMenuCommand.new(calibration_menu, "Load template").connect(SEL_COMMAND) do
+      dialog = FXFileDialog.new(self, "Open calibration file...")
+      dialog.directory = "#{DEFAULT_DIR}"
+      dialog.patternList = ["CSV (*.csv)"]
+
+      # after success on opening
+      if (dialog.execute != 0)
+        
+        # read CSV file and fill table with data
+        @calibration_points = Array.new
+        @table.removeRows(0, @table.numRows)
+        CSV.read(dialog.filename, {:skip_blanks => true}).each_with_index do |row, i|
+          @table.appendRows
+          @table.setItemText(i, CALIBRATION_COLUMN_SELECTED, "0.0")
+          @table.setItemText(i, CALIBRATION_COLUMN_DIFF, "0.0")
+          @table.setItemText(i, CALIBRATION_COLUMN_ORIGIN, row[1])
+          @table.setItemText(i, CALIBRATION_COLUMN_PEPTID, row[0])
+        end
+        
+        @spectrum_canvas.update
+      end
+    end
+    
+    FXMenuCommand.new(calibration_menu, "Load calibration file").connect(SEL_COMMAND) do
+      dialog = FXFileDialog.new(self, "Open calibration file...")
+      dialog.directory = "#{DEFAULT_DIR}"
+      dialog.patternList = ["YAML (*.yaml, *.yml)"]
+
+      # after success on opening
+      if (dialog.execute != 0)
+        
+        p "opening #{dialog.filename}"
+        @spectrum_canvas.update
+      end
+    end
+    # calibration menu (end)
+    
   end
 
   def add_image_part
@@ -90,6 +183,7 @@ class Reader < FXMainWindow
     image_container = FXPacker.new(top_horizontal_frame, :opts => FRAME_SUNKEN|LAYOUT_FIX_WIDTH|LAYOUT_FIX_HEIGHT, :width => IMAGE_WIDTH, :height => IMAGE_HEIGHT)
     @image_canvas = FXCanvas.new(image_container, :opts => LAYOUT_CENTER_X|LAYOUT_CENTER_Y|LAYOUT_FILL|LAYOUT_FIX_WIDTH|LAYOUT_FIX_HEIGHT, :width => IMAGE_WIDTH, :height => IMAGE_HEIGHT)
     @image_canvas.connect(SEL_PAINT, method(:draw_canvas))
+    
     @image_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
       if @image
         @selected_x, @selected_y = event.win_x, event.win_y
@@ -97,6 +191,7 @@ class Reader < FXMainWindow
         @image_canvas.update
       end
     end
+    
     @image_canvas.connect(SEL_MOTION) do |sender, sel, event|
       if @mouse_right_down
         @selected_x, @selected_y = event.win_x, event.win_y
@@ -104,9 +199,13 @@ class Reader < FXMainWindow
         @selected_y = @image_canvas.height if @selected_y > @image_canvas.height
         @selected_x = 0 if @selected_x < 0
         @selected_x = @image_canvas.width if @selected_x > @image_canvas.width
+        
+        spectrum = image_point_to_spectrum([@selected_x, @selected_y])
+        @status_line.text = "Selected spectrum #{spectrum.id}"
         @image_canvas.update
       end
     end
+    
     @image_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
       if @mouse_right_down
         @mouse_right_down = false
@@ -118,14 +217,18 @@ class Reader < FXMainWindow
 
     # tab settings
     @tabbook = FXTabBook.new(top_horizontal_frame, :opts => LAYOUT_FILL_X|LAYOUT_RIGHT|LAYOUT_FILL_Y)
-    @basics_tab = FXTabItem.new(@tabbook, "Basic")
+    @tabbook.connect(SEL_COMMAND) do |sender, sel, event|
+      @spectrum_canvas.update
+    end
     
+    # basic tab (fold)
+    @basics_tab = FXTabItem.new(@tabbook, "Basic")
     matrix = FXMatrix.new(@tabbook, :opts => FRAME_THICK|FRAME_RAISED|LAYOUT_FILL_X|MATRIX_BY_COLUMNS)
     matrix.numColumns = 2
-    matrix.numRows = 3
+    matrix.numRows = 4
     
     FXLabel.new(matrix, "m/z value", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
-    @mz_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL)
+    @mz_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL|LAYOUT_FILL)
     @mz_textfield.connect(SEL_COMMAND) do |sender, sel, event|
       if sender.text.size > 0
         @selected_point = [sender.text.to_f, @visible_spectrum.to_a.first.last]
@@ -134,7 +237,7 @@ class Reader < FXMainWindow
     end
     
     FXLabel.new(matrix, "interval value", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
-    @interval_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL)
+    @interval_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL|LAYOUT_FILL)
     @interval_textfield.connect(SEL_COMMAND) do |sender, sel, event|
       if sender.text.size > 0
         @selected_interval = sender.text.to_f
@@ -143,17 +246,116 @@ class Reader < FXMainWindow
     end
     
     FXLabel.new(matrix, "selected spectrum", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
-    @tree_list_box = FXTreeListBox.new(matrix, nil, :opts => FRAME_SUNKEN|FRAME_THICK|LAYOUT_SIDE_TOP)
+    @tree_list_box = FXTreeListBox.new(matrix, nil, :opts => FRAME_SUNKEN|FRAME_THICK|LAYOUT_SIDE_TOP|LAYOUT_FILL)
     @tree_list_box.connect(SEL_COMMAND) do |sender, sel, event|
       open_spectrum(event.to_s)
     end
     
-    draw_button = FXButton.new(matrix, "Draw image")
-    draw_button.connect(SEL_COMMAND) do |sender, sel, event|
+    FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
+    FXButton.new(matrix, "Show average spectrum", :opts => LAYOUT_FILL|BUTTON_NORMAL).connect(SEL_COMMAND) do |sender, sel, event|
+      # load average
+      if @average_spectrum.nil?
+        run_on_background do 
+          create_average_spectrum
+        end
+      end
+      @spectrum = @average_spectrum.dup
+      @visible_spectrum = @average_spectrum.dup
+      @selected_y = @selected_x = 0
+      @image_canvas.update
+      update_visible_spectrum
+    end
+    
+    FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
+    FXButton.new(matrix, "Draw image", :opts => LAYOUT_FILL|BUTTON_NORMAL).connect(SEL_COMMAND) do |sender, sel, event|
       run_on_background do
         create_image
       end
     end
+    
+    # basic tab (end)
+    
+    # calibration tab (fold)
+    @calibration_tab = FXTabItem.new(@tabbook, "Calibration")
+    horizontal_frame = FXHorizontalFrame.new(@tabbook, :opts => LAYOUT_FILL_X|LAYOUT_SIDE_LEFT|FRAME_RAISED)
+    
+    table = FXTable.new(horizontal_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|TABLE_NO_COLSELECT)
+    table.horizontalGridShown = true
+    table.verticalGridShown = true
+    table.setTableSize(0, 4)
+    table.rowRenumbering = true
+    table.rowHeaderMode = LAYOUT_FIX_WIDTH
+    table.rowHeaderWidth = 30
+    table.setColumnText(0, "selected")
+    table.setColumnWidth(CALIBRATION_COLUMN_SELECTED, COLUMN_DEFAULT_WIDTH)
+    table.setColumnText(1, "origin")
+    table.setColumnWidth(CALIBRATION_COLUMN_ORIGIN, COLUMN_DEFAULT_WIDTH)
+    table.setColumnText(2, "diff")
+    table.setColumnWidth(CALIBRATION_COLUMN_DIFF, COLUMN_DEFAULT_WIDTH)
+    table.setColumnText(3, "peptid")
+    table.setColumnWidth(CALIBRATION_COLUMN_PEPTID, 85)
+    table.selBackColor = FXColor::DarkGrey
+    @table = table
+    
+    table.connect(SEL_REPLACED) do |sender, sel, event|
+      item_position = event.fm
+      item = sender.getItem(item_position.row, item_position.col)
+      
+      # validate input data
+     case item_position.col
+      when CALIBRATION_COLUMN_SELECTED..CALIBRATION_COLUMN_DIFF
+        item.text = item.text.to_f.to_s
+      end
+      
+    end
+    
+    vertical_frame = FXVerticalFrame.new(horizontal_frame, :opts => LAYOUT_FILL_Y|LAYOUT_FIX_WIDTH|LAYOUT_SIDE_RIGHT, :width => 100)
+    
+    # button adding row
+    add_row_button = FXButton.new(vertical_frame, "Add row", :opts => LAYOUT_FILL_X|BUTTON_NORMAL)
+    add_row_button.connect(SEL_COMMAND) do |sender, sel, event|
+      table.appendRows
+      # init zero column value, last leave empty
+      (table.numColumns - 1).times do |col|
+        table.setItemText(table.numRows - 1, col, "0.0")
+      end
+      
+      # disable editing of diff column
+      table.disableItem(table.numRows - 1, CALIBRATION_COLUMN_DIFF)
+      
+      table.killSelection
+    end
+    
+    # button removing row
+    remove_row_button = FXButton.new(vertical_frame, "Remove row", :opts => LAYOUT_FILL_X|BUTTON_NORMAL)
+    remove_row_button.connect(SEL_COMMAND) do |sender, sel, event|
+      
+      # delete row    
+      if table.numRows > 0
+        selected_row = find_selected_table_row
+        selected_row ||= table.numRows - 1
+        table.removeRows(selected_row)
+        @calibration_points.delete_at(selected_row)
+      end
+      
+      # deselect everything
+      table.killSelection
+      
+      @spectrum_canvas.update
+    end
+  
+    FXVerticalSeparator.new(vertical_frame, :opts => LAYOUT_FILL_Y)
+    
+    combo_box = FXComboBox.new(vertical_frame, 1, :opts => LAYOUT_FILL_X|COMBOBOX_STATIC)
+    combo_box.fillItems(%w{Linear})
+    
+    clear_button = FXButton.new(vertical_frame, "Clear", :opts => LAYOUT_FILL_X|BUTTON_NORMAL)
+    apply_button = FXButton.new(vertical_frame, "Apply", :opts => LAYOUT_FILL_X|BUTTON_NORMAL)
+    
+    # calibration tab (end)
+  
+    # FIXME debug
+    # @tabbook.setCurrent(TAB_CALIBRATIONS)
   end
 
   def add_spectrum_part
@@ -161,7 +363,9 @@ class Reader < FXMainWindow
     bottom_horizontal_frame = FXHorizontalFrame.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
 
     @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
+    
     @spectrum_canvas.connect(SEL_PAINT, method(:draw_canvas))
+    
     @spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
       if @visible_spectrum
         @mouse_left_down = true
@@ -169,6 +373,7 @@ class Reader < FXMainWindow
         @zoom_from = canvas_point_to_spectrum([event.win_x, event.win_y])
       end
     end
+    
     @spectrum_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
       if @mouse_left_down
         @spectrum_canvas.ungrab
@@ -177,27 +382,52 @@ class Reader < FXMainWindow
         update_visible_spectrum
       end
     end 
+    
     @spectrum_canvas.connect(SEL_RIGHTBUTTONPRESS) do |sender, sel, event|
       @mouse_right_down = true
       @spectrum_canvas.grab
-      @selected_point = canvas_point_to_spectrum([event.win_x, event.win_y])
+      point = [event.win_x, event.win_y]
+      case @tabbook.current
+      when TAB_BASICS
+        @selected_point = canvas_point_to_spectrum(point)
+      when TAB_CALIBRATIONS
+        choose_calibration_point(canvas_point_to_spectrum(point).first)          
+      end
       @spectrum_canvas.update
     end
+    
     @spectrum_canvas.connect(SEL_RIGHTBUTTONRELEASE) do |sender, sel, event|
       if @mouse_right_down
         @spectrum_canvas.ungrab
         @mouse_right_down = false
-        @mz_textfield.text = @selected_point.first.round(ROUND_DIGITS).to_s
+        point = [event.win_x, event.win_y]
+        
+        case @tabbook.current
+        when TAB_BASICS then @mz_textfield.text = @selected_point.first.round(ROUND_DIGITS).to_s
+        when TAB_CALIBRATIONS
+          choose_calibration_point(canvas_point_to_spectrum(point).first)          
+        end
       end
+      @spectrum_canvas.update
     end
+    
     @spectrum_canvas.connect(SEL_MOTION) do |sender, sel, event|
       if @mouse_left_down
         @zoom_to = canvas_point_to_spectrum([event.win_x, event.win_y])
         @status_line.text = "Zoom from #{@zoom_from.first} to #{@zoom_to.first}"
         @spectrum_canvas.update
       elsif @mouse_right_down
-        @selected_point = canvas_point_to_spectrum([event.win_x, event.win_y])
-        @status_line.text = "Selected MZ value #{@selected_point.first.round(ROUND_DIGITS)}"
+        
+        point = [event.win_x, event.win_y]
+        
+        case @tabbook.current
+        when TAB_BASICS
+          @selected_point = canvas_point_to_spectrum(point)
+          @status_line.text = "Selected MZ value #{@selected_point.first.round(ROUND_DIGITS)}"
+        when TAB_CALIBRATIONS
+          choose_calibration_point(canvas_point_to_spectrum(point).first)          
+        end
+        
         @spectrum_canvas.update
       end
     end
@@ -350,7 +580,7 @@ class Reader < FXMainWindow
       data = greyscale_data
 
       # create empty image
-      image = FXImage.new(getApp(), nil, IMAGE_KEEP|IMAGE_SHMI|IMAGE_SHMP, :width => @imzml.pixel_count_x, :height => @imzml.pixel_count_y)
+      image = FXPNGImage.new(getApp(), nil, IMAGE_KEEP|IMAGE_SHMI|IMAGE_SHMP, :width => @imzml.pixel_count_x, :height => @imzml.pixel_count_y)
       
       # rescale image and fill image view
       scale_w = IMAGE_WIDTH
@@ -398,17 +628,26 @@ class Reader < FXMainWindow
           if @visible_spectrum && @spectrum_min_x && @spectrum_max_x
             
             # recalculate points
-            points = Array.new
             
-            # draw line
-            @visible_spectrum.each do |mz, intensity|
-              point = spectrum_point_to_canvas([mz, intensity])
-              begin
+            # calculate spectrum points and save to cache
+            if @spectrum_drawn_points.nil?
+              points = Array.new
+              
+              previous_point = nil
+              useless_points = 0
+              @visible_spectrum.each do |mz, intensity|
+                point = spectrum_point_to_canvas([mz, intensity])
+                # do not draw the same point twice
                 points << FXPoint.new(point.first.to_i, point.last.to_i)
-              rescue
-                points << FXPoint.new(0, 0)
+              
+                previous_point = point
               end
+            
+              @spectrum_drawn_points = points
             end
+            
+            # load from cache
+            points = @spectrum_drawn_points
             
             # draw labels
             labels = Array.new
@@ -417,6 +656,7 @@ class Reader < FXMainWindow
             # FIXME
             debugger if visible_spectrum.last.nil? || visible_spectrum.first.nil? 
             
+            # draw visible spectrum
             every_x = (visible_spectrum.last.first - visible_spectrum.first.first) / LABEL_X_EVERY
             every_y = (@visible_spectrum.values.max - @visible_spectrum.values.min) / LABEL_Y_EVERY
             i, j = visible_spectrum.first.first, visible_spectrum.first.last
@@ -474,11 +714,20 @@ class Reader < FXMainWindow
             # draw selected fixed line
             draw_selected_line(dc, @selected_fixed_point, @selected_fixed_interval, FXColor::LightGrey)
             
-            # draw selected line
-            draw_selected_line(dc, @selected_point, @selected_interval, FXColor::SteelBlue)
+            if @tabbook.current == TAB_BASICS            
+              # draw selected line
+              draw_selected_line(dc, @selected_point, @selected_interval, FXColor::SteelBlue)
+            end
+
+            # draw calibration lines
+            if @calibration_points.size > 0 && @tabbook.current == TAB_CALIBRATIONS
+              @calibration_points.compact.each do |point|
+                draw_selected_line(dc, [point, 0], 0, FXColor::Green)
+              end
+            end
 
           end
-        when @image_canvas
+        when @image_canvas # (fold)
           # clear canvas
           dc.foreground = FXColor::White
           dc.fillRectangle(0, 0, @image_canvas.width, @image_canvas.height)
@@ -493,24 +742,15 @@ class Reader < FXMainWindow
             dc.foreground = FXColor::Green
             dc.drawLine(@selected_x, 0, @selected_x, sender.height)
             dc.drawLine(0, @selected_y, sender.width, @selected_y)
-          end
+          end 
+          # (end)
         end
       end
     end
   end
   
   def open_spectrum(id)
-    
-    # load average
-    if id == "Average spectrum"
-      @spectrum = @average_spectrum.dup
-      @visible_spectrum = @average_spectrum.dup
-      @selected_y = @selected_x = 0
-      @image_canvas.update
-      update_visible_spectrum
-      return
-    end
-    
+       
     # select current spectrum in list
     item = @tree_list_box.findItem(id)
     @tree_list_box.setCurrentItem(item)
@@ -532,7 +772,15 @@ class Reader < FXMainWindow
       intensity_array = spectrum.intensity_array(@datapath)
       
       zipped_array = mz_array.zip(intensity_array)
-      dictionary = Hash[*zipped_array.flatten]
+      # dictionary = Hash[*zipped_array.flatten]
+      
+      array = zipped_array.flatten
+      hash = Hash.new
+      array.each_with_index do |item, index|
+        hash[item] = array[index + 1] if index % 2 == 0
+      end
+      dictionary = hash
+      # dictionary = Hash[*array]
       @spectrum = dictionary
       @visible_spectrum = dictionary.dup
     
@@ -547,6 +795,7 @@ class Reader < FXMainWindow
     
     # reset calculated spectrum data
     @average_spectrum = @spectrum = nil
+    @spectrum_drawn_points = nil
     @imzml = nil
     
     # reset image vars
@@ -563,6 +812,10 @@ class Reader < FXMainWindow
     @mz_textfield.text = "0"
     @interval_textfield.text = "0"
     @tree_list_box.clearItems
+    
+    # calibration defaults
+    @calibration_points = Array.new
+    @table.removeRows(0, @table.numRows)
   end
 
   def read_file(filepath)
@@ -581,14 +834,14 @@ class Reader < FXMainWindow
 
       @imzml = imzml_parser.metadata
       
-      @tree_list_box.appendItem(nil, "Average spectrum")
       @imzml.spectrums.each do |s|
         @tree_list_box.appendItem(nil, s.id)
       end
       
     end
     
-    create_average_spectrum
+    open_spectrum(@imzml.spectrums.first.id)
+    # create_average_spectrum
     create_image
     
     @image_canvas.update
@@ -605,6 +858,9 @@ class Reader < FXMainWindow
       
       # delete unwanted values
       @visible_spectrum.delete_if{ |key, value| key < @zoom_from.first || key > @zoom_to.first }
+      
+      # reset spectrum cache
+      @spectrum_drawn_points = nil
       
       # reset zoom values
       @zoom_from = @zoom_to = nil
@@ -646,6 +902,25 @@ class Reader < FXMainWindow
     end
   end
 
+  def choose_calibration_point(point)
+    if @table.numRows > 0
+    
+      selected_row = find_selected_table_row
+      selected_row ||= @table.numRows - 1
+      
+      # save value
+      @calibration_points[selected_row] = point
+      
+      # fill value into table
+      @table.setItemText(selected_row, CALIBRATION_COLUMN_SELECTED, point.round(ROUND_DIGITS).to_s)
+      
+      # recalculate table
+      recalculate_table_row(selected_row)
+    
+      @spectrum_canvas.update
+    end
+  end
+
   def log(message = "Please wait")
     start = Time.now
     
@@ -684,6 +959,16 @@ class Reader < FXMainWindow
     @mutex.synchronize {
       @progress_dialog.increment(1)
     }
+  end
+  
+  def recalculate_table_row(row)
+    
+    # recalculate table
+    selected_item = @table.getItem(row, CALIBRATION_COLUMN_SELECTED)
+    origin_item = @table.getItem(row, CALIBRATION_COLUMN_ORIGIN)
+    
+    diff = selected_item.text.to_f - origin_item.text.to_f
+    @table.setItemText(row, CALIBRATION_COLUMN_DIFF, diff.round(ROUND_DIGITS).to_s, true)  
   end
 
   def canvas_point_to_spectrum(canvas_point)
@@ -735,15 +1020,28 @@ class Reader < FXMainWindow
     y_diff = @spectrum_max_y - @spectrum_min_y
     y_point_size = y_axis_height / y_diff.to_f
     
-    # recalculate points
-    
     # FIXME
     debugger if @spectrum_min_x.nil?
     
+    # recalculate points
     x_point_canvas = ((x_point_origin - @spectrum_min_x) * x_point_size) + AXIS_PADDING
-    y_point_canvas = @spectrum_canvas.height - AXIS_PADDING - (y_point_origin * y_point_size) - 1
+    y_point_canvas = @spectrum_canvas.height - AXIS_PADDING - (y_point_origin * y_point_size - @spectrum_min_y * y_point_size) - 1
     
     [x_point_canvas, y_point_canvas]
+  end
+  
+  def find_selected_table_row
+    row_selected = nil
+    if @table.anythingSelected?
+      @table.numRows.times do |row_number|
+        if @table.rowSelected?(row_number)
+          row_selected = row_number
+          break
+        end
+      end
+    end
+    
+    row_selected
   end
   
   def image_point_to_spectrum(point)
