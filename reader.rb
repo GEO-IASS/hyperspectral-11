@@ -6,6 +6,7 @@ require 'fox16/colors'
 
 require './imzml'
 require './ox'
+require './calibration'
 
 require 'debugger'
 require 'perftools'
@@ -21,7 +22,7 @@ class Reader < FXMainWindow
   LABEL_Y_EVERY = 4
   COLUMN_DEFAULT_WIDTH = 80
   DEFAULT_DIR = "../imzML/"
-  DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
+  # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
   # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Processed.imzML"
   # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s042_continuous/S042_Continuous.imzML"
   # DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s043_processed/S043_Processed.imzML"
@@ -154,24 +155,29 @@ class Reader < FXMainWindow
           @table.setItemText(i, CALIBRATION_COLUMN_DIFF, "0.0")
           @table.setItemText(i, CALIBRATION_COLUMN_ORIGIN, row[1])
           @table.setItemText(i, CALIBRATION_COLUMN_PEPTID, row[0])
+          
+          # FIXME debug
+          @table.setItemText(i, CALIBRATION_COLUMN_SELECTED, row[2])
+          @calibration_points << row[2].to_f
         end
         
         @spectrum_canvas.update
       end
     end
-    
-    FXMenuCommand.new(calibration_menu, "Load calibration file").connect(SEL_COMMAND) do
-      dialog = FXFileDialog.new(self, "Open calibration file...")
-      dialog.directory = "#{DEFAULT_DIR}"
-      dialog.patternList = ["YAML (*.yaml, *.yml)"]
 
-      # after success on opening
-      if (dialog.execute != 0)
-        
-        p "opening #{dialog.filename}"
-        @spectrum_canvas.update
-      end
-    end
+    # TODO implement    
+    # FXMenuCommand.new(calibration_menu, "Load calibration file").connect(SEL_COMMAND) do
+    #   dialog = FXFileDialog.new(self, "Open calibration file...")
+    #   dialog.directory = "#{DEFAULT_DIR}"
+    #   dialog.patternList = ["YAML (*.yaml, *.yml)"]
+    # 
+    #   # after success on opening
+    #   if (dialog.execute != 0)
+    #     
+    #     p "opening #{dialog.filename}"
+    #     @spectrum_canvas.update
+    #   end
+    # end
     # calibration menu (end)
     
   end
@@ -305,6 +311,8 @@ class Reader < FXMainWindow
      case item_position.col
       when CALIBRATION_COLUMN_SELECTED..CALIBRATION_COLUMN_DIFF
         item.text = item.text.to_f.to_s
+        
+        recalculate_table_row(item_position.row, false)
       end
       
     end
@@ -349,13 +357,24 @@ class Reader < FXMainWindow
     combo_box = FXComboBox.new(vertical_frame, 1, :opts => LAYOUT_FILL_X|COMBOBOX_STATIC)
     combo_box.fillItems(%w{Linear})
     
-    clear_button = FXButton.new(vertical_frame, "Clear", :opts => LAYOUT_FILL_X|BUTTON_NORMAL)
-    apply_button = FXButton.new(vertical_frame, "Apply", :opts => LAYOUT_FILL_X|BUTTON_NORMAL)
+    clear_button = FXButton.new(vertical_frame, "Clear", :opts => LAYOUT_FILL_X|BUTTON_NORMAL).connect(SEL_COMMAND) do
+        @calibration = nil
+        @spectrum = @original_spectrum.dup
+        @visible_spectrum = @spectrum.dup
+        @image_canvas.update
+        @spectrum_canvas.update 
+        @spectrum_drawn_points   
+        
+        update_visible_spectrum  
+    end
+    apply_button = FXButton.new(vertical_frame, "Apply", :opts => LAYOUT_FILL_X|BUTTON_NORMAL).connect(SEL_COMMAND) do
+      calibrate
+    end
     
     # calibration tab (end)
   
     # FIXME debug
-    # @tabbook.setCurrent(TAB_CALIBRATIONS)
+    @tabbook.setCurrent(TAB_CALIBRATIONS)
   end
 
   def add_spectrum_part
@@ -636,6 +655,8 @@ class Reader < FXMainWindow
               previous_point = nil
               useless_points = 0
               @visible_spectrum.each do |mz, intensity|
+                
+                mz = @calibration.recalculate(mz) if @calibration
                 point = spectrum_point_to_canvas([mz, intensity])
                 # do not draw the same point twice
                 points << FXPoint.new(point.first.to_i, point.last.to_i)
@@ -686,13 +707,6 @@ class Reader < FXMainWindow
               
                 j += every_y
               end
-            end
-            
-            # draw y labels
-            every_n = 
-            i = visible_spectrum.first.first
-            @visible_spectrum.each_with_index do |item, index| 
-              
             end
             
             # draw spectrum
@@ -772,16 +786,13 @@ class Reader < FXMainWindow
       intensity_array = spectrum.intensity_array(@datapath)
       
       zipped_array = mz_array.zip(intensity_array)
-      # dictionary = Hash[*zipped_array.flatten]
       
       array = zipped_array.flatten
       hash = Hash.new
-      array.each_with_index do |item, index|
-        hash[item] = array[index + 1] if index % 2 == 0
-      end
+      array.each_with_index {|item, index| hash[item] = array[index + 1] if index % 2 == 0 }
       dictionary = hash
-      # dictionary = Hash[*array]
       @spectrum = dictionary
+      @original_spectrum = dictionary.dup
       @visible_spectrum = dictionary.dup
     
       update_visible_spectrum
@@ -961,14 +972,48 @@ class Reader < FXMainWindow
     }
   end
   
-  def recalculate_table_row(row)
+  def calibrate
+    
+    origins = Array.new
+    
+    @calibration_points.each_with_index do |x, i|
+      item = @table.getItemText(i, CALIBRATION_COLUMN_ORIGIN)
+      origins << item.to_f
+    end
+    
+    x_values = @calibration_points.dup
+    y_values = origins.zip(@calibration_points).map { |x, y| (x-y) }
+    
+    # prepare values for linear calibration
+    xy_sum = x_values.zip(y_values).map { |x, y| x * y }.reduce(:+)
+    x_sum = x_values.reduce(:+)
+    y_sum = y_values.reduce(:+)
+    xx_sum = x_values.map{|x| x*x}.reduce(:+)
+    x_sumsum = x_sum*x_sum
+    n = x_values.size
+    
+    a = (n*xy_sum - x_sum * y_sum) / (n*xx_sum - x_sumsum)
+    b = (xx_sum*y_sum - x_sum*xy_sum)  / (n*xx_sum - x_sumsum)
+    
+    @calibration = IMZML::Calibration::Linear.new(a, b)
+    
+    array = @spectrum.map { |key, value| [@calibration.recalculate(key), value] }
+    hash = array_to_h(array)
+    @spectrum = hash
+    @visible_spectrum = hash.dup
+    @spectrum_drawn_points = nil
+    
+    update_visible_spectrum
+  end
+  
+  def recalculate_table_row(row, notify = true)
     
     # recalculate table
     selected_item = @table.getItem(row, CALIBRATION_COLUMN_SELECTED)
     origin_item = @table.getItem(row, CALIBRATION_COLUMN_ORIGIN)
     
     diff = selected_item.text.to_f - origin_item.text.to_f
-    @table.setItemText(row, CALIBRATION_COLUMN_DIFF, diff.round(ROUND_DIGITS).to_s, true)  
+    @table.setItemText(row, CALIBRATION_COLUMN_DIFF, diff.round(ROUND_DIGITS).to_s, notify)  
   end
 
   def canvas_point_to_spectrum(canvas_point)
@@ -1057,6 +1102,16 @@ class Reader < FXMainWindow
     y = ((index / @imzml.pixel_count_x).to_i * @scale_y) + @scale_y / 2
 
     [x, y]
+  end
+
+  # convert Array [[a, b], [c, d]] to hash {a=>b, c=>d} without stack problem
+  def array_to_h(array)
+    hash = Hash.new
+    array = array.flatten
+    array.each_with_index do |item, index| 
+      hash[item] = array[index + 1] if index % 2 == 0
+    end
+    hash
   end
 
 end
