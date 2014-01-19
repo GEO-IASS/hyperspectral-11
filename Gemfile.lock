@@ -1,8 +1,8 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    fxruby (1.6.25)
-    ox (1.9.4)
+    fxruby (1.6.28)
+    ox (2.0.12)
 
 PLATFORMS
   ruby
