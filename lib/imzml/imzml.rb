@@ -1,12 +1,11 @@
 require 'ox'
-require 'debugger'
 
-require './core_ext/string'
+require_relative '../core_ext/string'
 
-require './imzml/cv'
-require './imzml/cv_param'
-require './imzml/file_description'
-require './imzml/file_description/file_content'
+require_relative 'cv'
+require_relative 'cv_param'
+require_relative 'file_description'
+require_relative 'file_description/file_content'
 
 module ImzML
   

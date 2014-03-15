@@ -1,6 +1,6 @@
-require './spectrum'
+# require_relative 'spectrum'
 
-module IMZML
+module ImzML
 
   class Metadata
 

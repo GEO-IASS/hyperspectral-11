@@ -2,34 +2,33 @@
 
 require 'rubygems'
 require 'csv'
+require "pp"
+require "byebug"
 
 require 'fox16'
 require 'fox16/colors'
 
-require './imzml'
-require './ox'
-require './calibration'
-
-# require 'debugger'
-# require 'perftools'
+require_relative 'imzml/imzml'
+require_relative 'imzml/parser'
+require_relative 'imzml/calibration'
 
 include Fox
 
-class Reader < FXMainWindow
+class Hyperspectral < FXMainWindow
 	IMAGE_WIDTH = 300
 	IMAGE_HEIGHT = 300
 	AXIS_PADDING = 30
 	LABEL_X_EVERY = 10
 	LABEL_Y_EVERY = 4
 	COLUMN_DEFAULT_WIDTH = 80
-	DEFAULT_DIR = "../imzML/"
+	DEFAULT_DIR = "/Users/beny/Dropbox/School/dp/imzML"
 	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
 	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Processed.imzML"
 	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s042_continuous/S042_Continuous.imzML"
 	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s043_processed/S043_Processed.imzML"
 	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/testovaci_blbost.imzML"
 	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/20130115_lin_range_10row_100vdef_0V_DOBRA_144327.imzML"
-	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/calibration_files/20130503_2013_IMZML_141238.imzML"
+	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/calibration_files/20130503_2013_ImzML_141238.imzML"
 	ROUND_DIGITS = 4
 	
 	# tabs
@@ -43,10 +42,8 @@ class Reader < FXMainWindow
 	CALIBRATION_COLUMN_PEPTID = CALIBRATION_COLUMN_DIFF + 1
 	
 	def initialize(app)
-		p "hello #{1+2}"
-		p "Another hello"
 		
-		super(app, "imzML Reader", :width => 800, :height => 600)
+		super(app, "imzML Hyperspectral", :width => 800, :height => 600)
 		add_menu_bar
 		
 		self.connect(SEL_CONFIGURE) do
@@ -525,7 +522,7 @@ class Reader < FXMainWindow
 		create_resources
 		reset_to_default_values
 		
-		show(PLACEMENT_SCREEN)
+		show(PLACEMENT_VISIBLE)
 		
 		# FIXME debug
 		run_on_background do
@@ -844,12 +841,15 @@ class Reader < FXMainWindow
 		
 		reset_to_default_values
 		
+		pp "reading file"
+		
 		log("Parsing imzML file") do
-			
 			@filename = filepath.split("/").last
 			self.title = @filename
 			@datapath = filepath.gsub(/imzML$/, "ibd")
-			imzml_parser = ImzMLParser.new()
+			pp "datapath #{@datapath}"
+			imzml_parser = ImzML::Parser.new
+			pp "parser created"
 			File.open(filepath, 'r') do |f|
 				Ox.sax_parse(imzml_parser, f)
 			end
@@ -1006,7 +1006,7 @@ class Reader < FXMainWindow
 		a = (n*xy_sum - x_sum * y_sum) / (n*xx_sum - x_sumsum)
 		b = (xx_sum*y_sum - x_sum*xy_sum)  / (n*xx_sum - x_sumsum)
 		
-		@calibration = IMZML::Calibration::Linear.new(a, b)
+		@calibration = ImzML::Calibration::Linear.new(a, b)
 		
 		array = @spectrum.map { |key, value| [@calibration.recalculate(key), value] }
 		hash = array_to_h(array)
@@ -1129,7 +1129,7 @@ end
 
 if __FILE__ == $0
 	FXApp.new do |app|
-		Reader.new(app)
+		Hyperspectral.new(app)
 		app.create
 		app.run
 	end

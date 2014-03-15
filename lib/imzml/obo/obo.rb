@@ -1,4 +1,4 @@
-module IMZML
+module ImzML
 
   module OBO
 
