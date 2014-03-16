@@ -5,38 +5,46 @@ require 'csv'
 require "pp"
 require "byebug"
 
-require 'fox16'
-require 'fox16/colors'
+require_relative "hyperspectral/fox"
 
 require_relative 'imzml/imzml'
 require_relative 'imzml/parser'
 require_relative 'imzml/calibration'
+require_relative "imzml/smoothing/moving_average"
+require_relative "imzml/smoothing/savitzky_golay"
+require_relative "hyperspectral/spectrum_canvas"
 
 include Fox
 
-class Hyperspectral < FXMainWindow
-	IMAGE_WIDTH = 300
-	IMAGE_HEIGHT = 300
-	AXIS_PADDING = 30
-	LABEL_X_EVERY = 10
-	LABEL_Y_EVERY = 4
-	COLUMN_DEFAULT_WIDTH = 80
-	DEFAULT_DIR = "/Users/beny/Dropbox/School/dp/imzML"
-	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
-	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Processed.imzML"
-	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s042_continuous/S042_Continuous.imzML"
-	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s043_processed/S043_Processed.imzML"
-	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/testovaci_blbost.imzML"
-	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/20130115_lin_range_10row_100vdef_0V_DOBRA_144327.imzML"
-	# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/calibration_files/20130503_2013_ImzML_141238.imzML"
-	ROUND_DIGITS = 4
-	
-	# tabs
-	TAB_BASICS, TAB_SMOOTHING, TAB_CALIBRATIONS = 0, 1, 2
-	
-	# calibration columns
-	CALIBRATION_COLUMN_SELECTED, CALIBRATION_COLUMN_ORIGIN, CALIBRATION_COLUMN_DIFF, CALIBRATION_COLUMN_PEPTID = 0, 1, 2, 3
-	
+IMAGE_WIDTH = 300
+IMAGE_HEIGHT = 300
+AXIS_PADDING = 30
+LABEL_X_EVERY = 10
+LABEL_Y_EVERY = 4
+COLUMN_DEFAULT_WIDTH = 80
+DEFAULT_DIR = "/Users/beny/Dropbox/School/dp/imzML"
+DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
+# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Processed.imzML"
+# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s042_continuous/S042_Continuous.imzML"
+# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/s043_processed/S043_Processed.imzML"
+# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/testovaci_blbost.imzML"
+# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/test_files/20130115_lin_range_10row_100vdef_0V_DOBRA_144327.imzML"
+# DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/calibration_files/20130503_2013_ImzML_141238.imzML"
+ROUND_DIGITS = 4
+
+# tabs
+TAB_BASICS, TAB_SMOOTHING, TAB_CALIBRATIONS = 0, 1, 2
+
+# smoothing constants
+SMOOTHING_NONE = 0
+
+# calibration columns
+CALIBRATION_COLUMN_SELECTED, CALIBRATION_COLUMN_ORIGIN, CALIBRATION_COLUMN_DIFF, CALIBRATION_COLUMN_PEPTID = 0, 1, 2, 3
+
+module Hyperspectral
+
+class Reader < FXMainWindow
+		
 	def initialize(app)
 		
 		super(app, "imzML Hyperspectral", :width => 800, :height => 600)
@@ -68,9 +76,6 @@ class Hyperspectral < FXMainWindow
 		# status bar
 		status_bar = FXStatusBar.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FIX_HEIGHT, :height => 30)
 		@status_line = status_bar.statusLine
-		
-		# prepare resources
-		add_resources
 	end
 	
 	def add_menu_bar
@@ -240,6 +245,7 @@ class Hyperspectral < FXMainWindow
 		@mz_textfield = FXTextField.new(matrix, 10, :opts => LAYOUT_CENTER_Y|LAYOUT_CENTER_X|FRAME_SUNKEN|FRAME_THICK|TEXTFIELD_REAL|LAYOUT_FILL)
 		@mz_textfield.connect(SEL_COMMAND) do |sender, sel, event|
 			if sender.text.size > 0
+				# damn what the hell does mean the first.last??
 				@selected_point = [sender.text.to_f, @visible_spectrum.to_a.first.last]
 				@spectrum_canvas.update
 			end
@@ -250,7 +256,34 @@ class Hyperspectral < FXMainWindow
 		@interval_textfield.connect(SEL_COMMAND) do |sender, sel, event|
 			if sender.text.size > 0
 				@selected_interval = sender.text.to_f
-				@spectrum_canvas.update
+				def self.moving_average(array, n)
+					p "Moving averate with #{n}"
+					b = Array.new
+					n_half = n/2
+		
+					# print begging
+					array[0..n_half].each do |x|
+						p x
+					end
+		
+					# calculate and print middle part
+					array[n_half..-n_half].each do |x|
+						current_index = array.index(x)
+						sum_of_ns = array[(current_index - n_half)..(current_index + n_half)].inject{|sum,xx| sum += xx}
+						current_average = sum_of_ns/n
+			
+						p current_average
+			
+						b << current_average
+						b
+					end
+		
+					# print end
+					array[-n_half..-1].each do |x|
+						p x
+					end
+				end
+				.update
 			end
 		end
 		
@@ -284,6 +317,42 @@ class Hyperspectral < FXMainWindow
 		end
 		
 		# basic tab (end)
+		
+		# smoothing tab (fold)
+		
+		@smoothing_tab = FXTabItem.new(@tabbook, "Smoothing")
+		matrix = FXMatrix.new(@tabbook, :opts => FRAME_THICK|FRAME_RAISED|LAYOUT_FILL_X|MATRIX_BY_ROWS)
+		matrix.numColumns = 2
+		matrix.numRows = 3
+		
+		# smoothing radio choices
+		@smoothing = FXDataTarget.new(SMOOTHING_NONE)
+		@smoothing.connect(SEL_COMMAND) do |sender, sel, event|
+			puts "Smoothing is now #{sender.value}"
+		end
+		
+		# smoothing none choice
+		smoothing_none = FXRadioButton.new(matrix, "None", :target => @smoothing, :selector => FXDataTarget::ID_OPTION)
+		smoothing_none.checkState = true
+		
+		# smoothing moving average choice
+		smoothing_moving_average = FXRadioButton.new(matrix, "Moving average", :target => @smoothing, :selector => FXDataTarget::ID_OPTION + ImzML::Smoothing::MovingAverage::ID)
+		
+		# smoothing savitzky golay choice
+		smoothing_savitzky_golay = FXRadioButton.new(matrix, "Savitzky-Golay", :target => @smoothing, :selector => FXDataTarget::ID_OPTION + ImzML::Smoothing::SavitzkyGolay::ID)
+		
+		# smoothing specific settings
+		matrix = FXMatrix.new(matrix, :opts => LAYOUT_FILL_X|MATRIX_BY_ROWS)
+		matrix.numColumns = 2
+		matrix.numRows = 1
+		
+		FXLabel.new(matrix, "n", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
+		moving_average_smoothing_n_text_field = FXTextField.new(matrix, 10, :opts => FRAME_SUNKEN|FRAME_THICK|LAYOUT_SIDE_TOP|LAYOUT_FILL)
+		moving_average_smoothing_n_text_field.connect(SEL_COMMAND) do |sender, sel, event|
+			
+		end
+		
+		# smoothing tab (end)
 		
 		# calibration tab (fold)
 		@calibration_tab = FXTabItem.new(@tabbook, "Calibration")
@@ -378,16 +447,21 @@ class Hyperspectral < FXMainWindow
 		# calibration tab (end)
 		
 		# FIXME debug
-		@tabbook.setCurrent(TAB_CALIBRATIONS)
+		@tabbook.setCurrent(TAB_SMOOTHING)
 	end
 	
 	def add_spectrum_part
+		
+		@font = FXFont.new(app, "times")
+		@font.create
+		
 		# spectrum part
 		bottom_horizontal_frame = FXHorizontalFrame.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
 		
 		@spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
-		
 		@spectrum_canvas.connect(SEL_PAINT, method(:draw_canvas))
+		# @spectrum_canvas = Hyperspectral::SpectrumCanvas.new(bottom_horizontal_frame)
+		
 		
 		@spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
 			if @visible_spectrum
@@ -509,14 +583,9 @@ class Hyperspectral < FXMainWindow
 		end
 	end
 	
-	def add_resources
-		@font = FXFont.new(app, "times")
-	end
-	
 	def create
 		super
 		
-		create_resources
 		reset_to_default_values
 		
 		show(PLACEMENT_VISIBLE)
@@ -567,10 +636,6 @@ class Hyperspectral < FXMainWindow
 		end
 		
 		update_visible_spectrum
-	end
-	
-	def create_resources
-		@font.create
 	end
 	
 	def create_image
@@ -636,7 +701,7 @@ class Hyperspectral < FXMainWindow
 			FXDCWindow.new(sender, event) do |dc|
 				case sender
 				when @spectrum_canvas
-					# draw background
+					# # draw background
 					dc.foreground = FXColor::White
 					dc.fillRectangle(0, 0, sender.width, sender.height)
 					
@@ -649,7 +714,6 @@ class Hyperspectral < FXMainWindow
 					dc.font = @font
 					
 					if @visible_spectrum && @spectrum_min_x && @spectrum_max_x
-					
 						
 						# recalculate points
 						
@@ -678,9 +742,6 @@ class Hyperspectral < FXMainWindow
 						# draw labels
 						labels = Array.new
 						visible_spectrum = @visible_spectrum.to_a
-						
-						# FIXME
-						debugger if visible_spectrum.last.nil? || visible_spectrum.first.nil? 
 						
 						# draw visible spectrum
 						every_x = (visible_spectrum.last.first - visible_spectrum.first.first) / LABEL_X_EVERY
@@ -733,9 +794,15 @@ class Hyperspectral < FXMainWindow
 						# draw selected fixed line
 						draw_selected_line(dc, @selected_fixed_point, @selected_fixed_interval, FXColor::LightGrey)
 						
-						if @tabbook.current == TAB_BASICS			 
-							# draw selected line
+						# draw selected line
+						if @tabbook.current == TAB_BASICS
 							draw_selected_line(dc, @selected_point, @selected_interval, FXColor::SteelBlue)
+						end
+						
+						# draw smoothing preview
+						if @tabbook.current == TAB_SMOOTHING
+							dc.foreground = FXColor::Blue
+							dc.drawLine(0,0, 100, 100)
 						end
 						
 						# draw calibration lines
@@ -746,6 +813,7 @@ class Hyperspectral < FXMainWindow
 						end
 						
 					end
+					
 				when @image_canvas # (fold)
 					# clear canvas
 					dc.foreground = FXColor::White
@@ -1006,9 +1074,8 @@ class Hyperspectral < FXMainWindow
 		@calibration = ImzML::Calibration::Linear.new(a, b)
 		
 		array = @spectrum.map { |key, value| [@calibration.recalculate(key), value] }
-		hash = array_to_h(array)
-		@spectrum = hash
-		@visible_spectrum = hash.dup
+		@spectrum = array_to_h(array)
+		@visible_spectrum = @spectrum.dup
 		@spectrum_drawn_points = nil
 		
 		update_visible_spectrum
@@ -1073,9 +1140,6 @@ class Hyperspectral < FXMainWindow
 		y_diff = @spectrum_max_y - @spectrum_min_y
 		y_point_size = y_axis_height / y_diff.to_f
 		
-		# FIXME
-		debugger if @spectrum_min_x.nil?
-		
 		# recalculate points
 		x_point_canvas = ((x_point_origin - @spectrum_min_x) * x_point_size) + AXIS_PADDING
 		y_point_canvas = @spectrum_canvas.height - AXIS_PADDING - (y_point_origin * y_point_size - @spectrum_min_y * y_point_size) - 1
@@ -1124,9 +1188,11 @@ class Hyperspectral < FXMainWindow
 	
 end
 
+end
+
 if __FILE__ == $0
 	FXApp.new do |app|
-		Hyperspectral.new(app)
+		Hyperspectral::Reader.new(app)
 		app.create
 		app.run
 	end
