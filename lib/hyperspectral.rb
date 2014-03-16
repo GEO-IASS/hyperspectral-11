@@ -32,14 +32,10 @@ class Hyperspectral < FXMainWindow
 	ROUND_DIGITS = 4
 	
 	# tabs
-	TAB_BASICS = 0
-	TAB_CALIBRATIONS = TAB_BASICS + 1
+	TAB_BASICS, TAB_SMOOTHING, TAB_CALIBRATIONS = 0, 1, 2
 	
 	# calibration columns
-	CALIBRATION_COLUMN_SELECTED = 0
-	CALIBRATION_COLUMN_ORIGIN = CALIBRATION_COLUMN_SELECTED + 1
-	CALIBRATION_COLUMN_DIFF = CALIBRATION_COLUMN_ORIGIN + 1
-	CALIBRATION_COLUMN_PEPTID = CALIBRATION_COLUMN_DIFF + 1
+	CALIBRATION_COLUMN_SELECTED, CALIBRATION_COLUMN_ORIGIN, CALIBRATION_COLUMN_DIFF, CALIBRATION_COLUMN_PEPTID = 0, 1, 2, 3
 	
 	def initialize(app)
 		
@@ -260,6 +256,7 @@ class Hyperspectral < FXMainWindow
 		
 		FXLabel.new(matrix, "selected spectrum", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
 		@tree_list_box = FXTreeListBox.new(matrix, nil, :opts => FRAME_SUNKEN|FRAME_THICK|LAYOUT_SIDE_TOP|LAYOUT_FILL)
+		@tree_list_box.numVisible = 5
 		@tree_list_box.connect(SEL_COMMAND) do |sender, sel, event|
 			open_spectrum(event.to_s)
 		end
