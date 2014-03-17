@@ -4,20 +4,31 @@ module Hyperspectral
 	
 	class SpectrumCanvas < Fox::FXCanvas
 		
+		# The currently displayed full spectrum
 		attr_accessor :visible_spectrum
+		
+		# Cache for currently visible points
 		attr_accessor :spectrum_drawn_points
+		
+		# Boundaries for currently visible spectrum
 		attr_accessor :spectrum_min_x
 		attr_accessor :spectrum_max_x
 		attr_accessor :spectrum_min_y
 		attr_accessor :spectrum_max_y
+		
+		# Properties used to draw the zoom rectangle
 		attr_accessor :zoom_from
 		attr_accessor :zoom_to
+		
+		# Helper properties for displaying the selection with interval
 		attr_accessor :selected_point
 		attr_accessor :selected_fixed_point
 		attr_accessor :selected_fixed_interval
 		attr_accessor :selected_interval
-		attr_accessor :selected_point
 		
+		# Init method
+		#
+		# parent
 		def initialize(parent)
 			super(parent, :opts => LAYOUT_FILL)
 			
@@ -27,6 +38,9 @@ module Hyperspectral
 			connect(SEL_PAINT, method(:draw))
 		end
 	
+		# Spectrum part drawing method
+		#
+		# Returns nothing
 		def draw(sender, sel, event)
 			FXDCWindow.new(sender, event) do |dc|
 				# draw background
@@ -42,8 +56,6 @@ module Hyperspectral
 				dc.font = @font
 				
 				if @visible_spectrum && @spectrum_min_x && @spectrum_max_x
-					
-					# recalculate points
 					
 					# calculate spectrum points and save to cache
 					if @spectrum_drawn_points.nil?
@@ -148,6 +160,11 @@ module Hyperspectral
 			
 		end
 	
+		# Converting canvas point to spectrum point
+		# 
+		# canvas_point - point in the canvas
+		# 
+		# Returns point in spectrum domain
 		def canvas_point_to_spectrum(canvas_point)
 			# map points
 			x_point_origin = canvas_point.first
@@ -178,6 +195,11 @@ module Hyperspectral
 			[x_point_spectrum, y_point_spectrum]
 		end
 	
+		# Converting spectrum point to canvas point
+		# 
+		# spectrum_point - point in the spectrum
+		#
+		# Returns point in canvas domain
 		def spectrum_point_to_canvas(spectrum_point)
 		
 			# if spectrum was not yet loaded
@@ -204,6 +226,14 @@ module Hyperspectral
 			[x_point_canvas, y_point_canvas]
 		end
 		
+		# Drawing vertical line, used for selection of specific part of spectrum
+		#
+		# context - instance of FXDCWindow
+		# selected_point - selected point in spectrum domain
+		# selected_interval - selected interval in spectrum domain
+		# color - which color to use for the line
+		#
+		# Returns nothing
 		def draw_selected_line(context, selected_point, selected_interval, color)
 			# draw selected line
 			if selected_point

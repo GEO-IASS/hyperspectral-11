@@ -50,6 +50,7 @@ class Reader < FXMainWindow
 		super(app, "imzML Hyperspectral", :width => 800, :height => 600)
 		add_menu_bar
 		
+		# when window change size, reset the spectrum cache
 		self.connect(SEL_CONFIGURE) do
 			@spectrum_canvas.spectrum_drawn_points = nil
 		end
