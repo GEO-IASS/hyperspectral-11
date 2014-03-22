@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
-require 'rubygems'
-require 'csv'
+require "csv"
 require "pp"
 require "byebug"
 
@@ -44,15 +43,21 @@ CALIBRATION_COLUMN_SELECTED, CALIBRATION_COLUMN_ORIGIN, CALIBRATION_COLUMN_DIFF,
 module Hyperspectral
 
 class Reader < FXMainWindow
+	
+	attr_reader :smoothing_methods
+	attr_accessor :selected_smoothing
 		
 	def initialize(app)
 		
 		super(app, "imzML Hyperspectral", :width => 800, :height => 600)
 		add_menu_bar
 		
+		# init smoothing methods
+		@smoothing_methods = [nil, ImzML::Smoothing::MovingAverage.new, ImzML::Smoothing::SavitzkyGolay.new]
+		
 		# when window change size, reset the spectrum cache
 		self.connect(SEL_CONFIGURE) do
-			@spectrum_canvas.spectrum_drawn_points = nil
+			@spectrum_canvas.reset_cache
 		end
 		
 		@mutex = Mutex.new
@@ -257,33 +262,6 @@ class Reader < FXMainWindow
 		@interval_textfield.connect(SEL_COMMAND) do |sender, sel, event|
 			if sender.text.size > 0
 				@spectrum_canvas.selected_interval = sender.text.to_f
-				def self.moving_average(array, n)
-					p "Moving averate with #{n}"
-					b = Array.new
-					n_half = n/2
-		
-					# print begging
-					array[0..n_half].each do |x|
-						p x
-					end
-		
-					# calculate and print middle part
-					array[n_half..-n_half].each do |x|
-						current_index = array.index(x)
-						sum_of_ns = array[(current_index - n_half)..(current_index + n_half)].inject{|sum,xx| sum += xx}
-						current_average = sum_of_ns/n
-			
-						p current_average
-			
-						b << current_average
-						b
-					end
-		
-					# print end
-					array[-n_half..-1].each do |x|
-						p x
-					end
-				end
 				@spectrum_canvas.update
 			end
 		end
@@ -327,30 +305,40 @@ class Reader < FXMainWindow
 		matrix.numRows = 3
 		
 		# smoothing radio choices
-		@smoothing = FXDataTarget.new(SMOOTHING_NONE)
-		@smoothing.connect(SEL_COMMAND) do |sender, sel, event|
-			puts "Smoothing is now #{sender.value}"
+		self.selected_smoothing = FXDataTarget.new(0)
+		self.selected_smoothing.connect(SEL_COMMAND) do |sender, sel, event|
+			
+			# redraw spectrum with preview
+			@spectrum_canvas.smoothing = self.smoothing_methods[sender.value]
+			@spectrum_canvas.reset_cache
+			@spectrum_canvas.update
 		end
 		
-		# smoothing none choice
-		smoothing_none = FXRadioButton.new(matrix, "None", :target => @smoothing, :selector => FXDataTarget::ID_OPTION)
-		smoothing_none.checkState = true
-		
-		# smoothing moving average choice
-		smoothing_moving_average = FXRadioButton.new(matrix, "Moving average", :target => @smoothing, :selector => FXDataTarget::ID_OPTION + ImzML::Smoothing::MovingAverage::ID)
-		
-		# smoothing savitzky golay choice
-		smoothing_savitzky_golay = FXRadioButton.new(matrix, "Savitzky-Golay", :target => @smoothing, :selector => FXDataTarget::ID_OPTION + ImzML::Smoothing::SavitzkyGolay::ID)
-		
+		# add smoothing methods to the matrix
+		self.smoothing_methods.each_with_index do |value, index|
+			
+			# for no smoothing set the name
+			name = value.nil? ? "None" : value.name
+			radio_button = FXRadioButton.new(matrix, name, self.selected_smoothing, FXDataTarget::ID_OPTION + index)
+			
+			# by default select no smoothing
+			radio_button.checkState = true if value.nil? == 0
+		end
+
 		# smoothing specific settings
 		matrix = FXMatrix.new(matrix, :opts => LAYOUT_FILL_X|MATRIX_BY_ROWS)
 		matrix.numColumns = 2
 		matrix.numRows = 1
 		
-		FXLabel.new(matrix, "n", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
-		moving_average_smoothing_n_text_field = FXTextField.new(matrix, 10, :opts => FRAME_SUNKEN|FRAME_THICK|LAYOUT_SIDE_TOP|LAYOUT_FILL)
-		moving_average_smoothing_n_text_field.connect(SEL_COMMAND) do |sender, sel, event|
+		# create text field for window size settings
+		FXLabel.new(matrix, "window size", nil, LAYOUT_CENTER_Y|LAYOUT_CENTER_X|JUSTIFY_RIGHT|LAYOUT_FILL_ROW)
+		window_size_text_field = FXTextField.new(matrix, 10, :opts => FRAME_SUNKEN|FRAME_THICK|LAYOUT_SIDE_TOP|LAYOUT_FILL)
+		window_size_text_field.connect(SEL_COMMAND) do |sender, sel, event|
 			
+			# when value of window size change, update the graph
+			@spectrum_canvas.smoothing_window_size = sender.text.to_i
+			@spectrum_canvas.reset_cache
+			@spectrum_canvas.update
 		end
 		
 		# smoothing tab (end)
@@ -436,8 +424,8 @@ class Reader < FXMainWindow
 			@spectrum = @original_spectrum.dup
 			@spectrum_canvas.visible_spectrum = @spectrum.dup
 			@image_canvas.update
-			@spectrum_canvas.update 
-			@spectrum_canvas.spectrum_drawn_points	 
+			@spectrum_canvas.reset_cache
+			@spectrum_canvas.update  
 			
 			update_visible_spectrum	 
 		end
@@ -464,11 +452,12 @@ class Reader < FXMainWindow
 		@spectrum_canvas = Hyperspectral::SpectrumCanvas.new(bottom_horizontal_frame)
 		
 		@spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
-			if @spectrum_canvas.spectrum_drawn_points
+			# FIXME why is the if here, i think it is not necessary
+			# if @spectrum_canvas.spectrum_drawn_points
 				@mouse_left_down = true
 				@spectrum_canvas.grab
 				@spectrum_canvas.zoom_from = @spectrum_canvas.canvas_point_to_spectrum([event.win_x, event.win_y])
-			end
+			# end
 		end
 		
 		@spectrum_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
@@ -761,7 +750,7 @@ class Reader < FXMainWindow
 		
 		# reset calculated spectrum data
 		@average_spectrum = @spectrum = nil
-		@spectrum_canvas.spectrum_drawn_points = nil
+		@spectrum_canvas.reset_cache
 		@imzml = nil
 		
 		# reset image vars
@@ -788,15 +777,11 @@ class Reader < FXMainWindow
 		
 		reset_to_default_values
 		
-		pp "reading file"
-		
 		log("Parsing imzML file") do
 			@filename = filepath.split("/").last
 			self.title = @filename
 			@datapath = filepath.gsub(/imzML$/, "ibd")
-			pp "datapath #{@datapath}"
 			imzml_parser = ImzML::Parser.new
-			pp "parser created"
 			File.open(filepath, 'r') do |f|
 				Ox.sax_parse(imzml_parser, f)
 			end
@@ -829,7 +814,7 @@ class Reader < FXMainWindow
 			@spectrum_canvas.visible_spectrum.delete_if{ |key, value| key < @spectrum_canvas.zoom_from.first || key > @spectrum_canvas.zoom_to.first }
 			
 			# reset spectrum cache
-			@spectrum_canvas.spectrum_drawn_points = nil
+			@spectrum_canvas.reset_cache
 			
 			# reset zoom values
 			@spectrum_canvas.zoom_from = @spectrum_canvas.zoom_to = nil
@@ -932,7 +917,7 @@ class Reader < FXMainWindow
 		array = @spectrum.map { |key, value| [@calibration.recalculate(key), value] }
 		@spectrum = array_to_h(array)
 		@spectrum_canvas.visible_spectrum = @spectrum.dup
-		@spectrum_canvas.spectrum_drawn_points = nil
+		@spectrum_canvas.reset_cache
 		
 		update_visible_spectrum
 	end

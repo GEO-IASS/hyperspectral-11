@@ -1,8 +1,17 @@
+require "savgol"
+
 module ImzML
 	module Smoothing
 	
 		class SavitzkyGolay
-			ID = 2
+			
+			def name
+				"Savitzky-Golay"
+			end
+			
+			def apply(array, window_size = 5, order = 3)
+				array.savgol(window_size, order)
+			end
 		end
 	
 	end

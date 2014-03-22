@@ -8,8 +8,15 @@ module Hyperspectral
 		attr_accessor :visible_spectrum
 		
 		# Cache for currently visible points
-		attr_accessor :spectrum_drawn_points
+		attr_accessor :cached_visible_spectrum
 		
+		# Smoothing variables
+		attr_accessor :smoothing
+		attr_accessor :smoothing_window_size
+
+		# Spectrum preview before alternating it's points
+		attr_accessor :spectrum_preview
+
 		# Boundaries for currently visible spectrum
 		attr_accessor :spectrum_min_x
 		attr_accessor :spectrum_max_x
@@ -35,6 +42,9 @@ module Hyperspectral
 			@font = FXFont.new(app, "times")
 			@font.create
 			
+			
+			self.smoothing_window_size = 5
+			
 			connect(SEL_PAINT, method(:draw))
 		end
 	
@@ -57,12 +67,17 @@ module Hyperspectral
 				
 				if @visible_spectrum && @spectrum_min_x && @spectrum_max_x
 					
+					# FIXME debug
+					preview_points = Array.new
+					
 					# calculate spectrum points and save to cache
-					if @spectrum_drawn_points.nil?
+					if @cached_visible_spectrum.nil?
+						
 						points = Array.new
 						
 						previous_point = nil
-						useless_points = 0
+						
+						# convert spectrum points and create canvas points
 						@visible_spectrum.each do |mz, intensity|
 							
 							# FIXME calibration
@@ -70,21 +85,30 @@ module Hyperspectral
 							point = spectrum_point_to_canvas([mz, intensity])
 							# do not draw the same point twice
 							points << FXPoint.new(point.first.to_i, point.last.to_i)
-							
-							previous_point = point
+							# previous_point = point
 						end
 						
-						@spectrum_drawn_points = points
+						# preview for smoothing
+						if !self.smoothing.nil?
+							preview_values = @visible_spectrum.values
+							keys = @visible_spectrum.keys
+							self.smoothing.apply(preview_values, self.smoothing_window_size).each_with_index do |intensity, index|
+								point = spectrum_point_to_canvas([keys[index], intensity])
+								preview_points << FXPoint.new(point.first.to_i, point.last.to_i)
+							end
+						end
+						
+						@cached_visible_spectrum = points
 					end
 					
 					# load from cache
-					points = @spectrum_drawn_points
+					points = @cached_visible_spectrum
 					
 					# draw labels
 					labels = Array.new
 					visible_spectrum = @visible_spectrum.to_a
 					
-					# draw visible spectrum
+					# draw visible spectrum labels
 					every_x = (visible_spectrum.last.first - visible_spectrum.first.first) / LABEL_X_EVERY
 					every_y = (@visible_spectrum.values.max - @visible_spectrum.values.min) / LABEL_Y_EVERY
 					i, j = visible_spectrum.first.first, visible_spectrum.first.last
@@ -116,9 +140,13 @@ module Hyperspectral
 						end
 					end
 					
-					# draw spectrum
+					# draw spectrum line
 					dc.foreground = FXColor::Red
 					dc.drawLines(points)
+					
+					# FIXME
+					dc.foreground = FXColor::Blue
+					dc.drawLines(preview_points)
 					
 					# draw zoom rect
 					if @zoom_from && @zoom_to
@@ -258,6 +286,13 @@ module Hyperspectral
 					context.fillRectangle(interval_from.first, AXIS_PADDING - 1, interval_to.first - interval_from.first, self.height - 2 * AXIS_PADDING)
 				end
 			end
+		end
+		
+		# Resets spectrum point cache
+		#
+		# Returns nothing
+		def reset_cache
+			@cached_visible_spectrum = nil
 		end
 	end
 end
