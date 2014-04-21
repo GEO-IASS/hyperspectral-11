@@ -2,11 +2,15 @@ GEM
   remote: https://rubygems.org/
   specs:
     fxruby (1.6.28)
+    minitest (5.2.1)
     ox (2.0.12)
+    rinruby (2.0.3)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
   fxruby
+  minitest
   ox
+  rinruby

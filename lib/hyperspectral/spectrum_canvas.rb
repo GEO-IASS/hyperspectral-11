@@ -32,6 +32,9 @@ module Hyperspectral
 		attr_accessor :selected_fixed_point
 		attr_accessor :selected_fixed_interval
 		attr_accessor :selected_interval
+    
+    # Found peaks to draw
+    attr_accessor :peaks
 		
 		# Init method
 		#
@@ -53,7 +56,8 @@ module Hyperspectral
 		# Returns nothing
 		def draw(sender, sel, event)
 			FXDCWindow.new(sender, event) do |dc|
-				# draw background
+        
+        # draw background
 				dc.foreground = FXColor::White
 				dc.fillRectangle(0, 0, sender.width, sender.height)
 				
@@ -147,6 +151,13 @@ module Hyperspectral
 					# FIXME
 					dc.foreground = FXColor::Blue
 					dc.drawLines(preview_points)
+          
+          # draw found peaks
+          if @peaks 
+            @peaks.each do |p|
+              draw_selected_line(dc, [p, 0], 0, FXColor::Blue)
+            end
+          end
 					
 					# draw zoom rect
 					if @zoom_from && @zoom_to

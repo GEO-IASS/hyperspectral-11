@@ -12,6 +12,7 @@ require_relative 'imzml/calibration'
 require_relative "imzml/smoothing/moving_average"
 require_relative "imzml/smoothing/savitzky_golay"
 require_relative "hyperspectral/spectrum_canvas"
+require_relative "hyperspectral/peak_detector"
 
 include Fox
 
@@ -294,6 +295,18 @@ class Reader < FXMainWindow
 				create_image
 			end
 		end
+    
+		FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
+		FXButton.new(matrix, "Find peaks", :opts => LAYOUT_FILL|BUTTON_NORMAL).connect(SEL_COMMAND) do |sender, sel, event|
+      run_on_background do
+			
+        # TODO load data from current spectrum
+        peaks = PeakDetector.peak_indexes(@spectrum.values)
+        keys = @spectrum.keys
+        @spectrum_canvas.peaks = peaks.map{|index| keys[index]}
+        @spectrum_canvas.update
+      end
+		end
 		
 		# basic tab (end)
 		
@@ -436,7 +449,7 @@ class Reader < FXMainWindow
 		# calibration tab (end)
 		
 		# FIXME debug
-		@tabbook.setCurrent(TAB_SMOOTHING)
+		@tabbook.setCurrent(TAB_BASICS)
 	end
 	
 	def add_spectrum_part
