@@ -1,5 +1,3 @@
-require_relative "fox"
-
 module Hyperspectral
 	
 	class SpectrumCanvas < Fox::FXCanvas
