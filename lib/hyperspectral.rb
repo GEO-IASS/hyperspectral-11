@@ -4,15 +4,14 @@ require "csv"
 require "pp"
 require "byebug"
 
-require_relative "hyperspectral/fox"
+require "imzml"
 
-require_relative 'imzml/imzml'
-require_relative 'imzml/parser'
-require_relative 'imzml/calibration'
-require_relative "imzml/smoothing/moving_average"
-require_relative "imzml/smoothing/savitzky_golay"
+require_relative "hyperspectral"
+require_relative "hyperspectral/fox"
 require_relative "hyperspectral/spectrum_canvas"
 require_relative "hyperspectral/peak_detector"
+require_relative "hyperspectral/smoothing/moving_average"
+require_relative "hyperspectral/smoothing/savitzky_golay"
 
 include Fox
 
@@ -54,7 +53,7 @@ class Reader < FXMainWindow
 		add_menu_bar
 		
 		# init smoothing methods
-		@smoothing_methods = [nil, ImzML::Smoothing::MovingAverage.new, ImzML::Smoothing::SavitzkyGolay.new]
+		@smoothing_methods = [nil, Hyperspectral::Smoothing::MovingAverage.new, Hyperspectral::Smoothing::SavitzkyGolay.new]
 		
 		# when window change size, reset the spectrum cache
 		self.connect(SEL_CONFIGURE) do
@@ -118,7 +117,8 @@ class Reader < FXMainWindow
 					FXFileStream.open(saveDialog.filename, FXStreamSave) do |outfile|
 						image = FXPNGImage.new(getApp(), :width => @image.width, :height => @image.height)
 						image.setPixels(@image.pixels)
-						image.scale(@imzml.pixel_count_x, @imzml.pixel_count_y)
+            size = @metadata.scan_settings.first.image.size
+						image.scale(size.x, size.y)
 						image.savePixels(outfile)
 					end
 				end
@@ -271,7 +271,10 @@ class Reader < FXMainWindow
 		@tree_list_box = FXTreeListBox.new(matrix, nil, :opts => FRAME_SUNKEN|FRAME_THICK|LAYOUT_SIDE_TOP|LAYOUT_FILL)
 		@tree_list_box.numVisible = 5
 		@tree_list_box.connect(SEL_COMMAND) do |sender, sel, event|
-			open_spectrum(event.to_s)
+      
+      # open specfic spectrum
+      spectrum = @metadata.spectrums[event.to_s.to_sym]
+			open_spectrum(spectrum)
 		end
 		
 		FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
@@ -602,35 +605,33 @@ class Reader < FXMainWindow
 	
 		log("Calculating average spectrum") do
 			
-			dictionary = Hash.new
-			sum = @imzml.spectrums.size
+      dictionary = Hash.new
+      sum = @metadata.spectrums.size
 			
-			progress_add(sum.to_i)
+      progress_add(sum.to_i)
 			
-			# add all values
-			@imzml.spectrums.each do |s|
-				
-				mz_array = s.mz_array(@datapath)
-				intensity_array = s.intensity_array(@datapath)
-				
-				# create data array
-				mz_array.zip(intensity_array).each do |key_value|
-					key = key_value.first
-					value = key_value.last
+      # add all values
+      @metadata.spectrums.each do |name, spectrum|
+        
+        zipped_array = spectrum.mz_binary.data.zip(spectrum.intensity_binary.data)
+        
+        # create data array
+        zipped_array.each do |key_value|
+          key = key_value.first
+          value = key_value.last
 					
-					dictionary[key] ||= 0
-					dictionary[key] += value
-				end		   
+          dictionary[key] ||= 0
+          dictionary[key] += value
+        end	
 				
-				progress_done
-				
-			end
+        progress_done
+      end
 			
 			# divide and make average
 			dictionary.each do |key, value|
 				value /= sum
 			end
-			
+      			
 			# save average spectrum
 			@spectrum = dictionary
 			@spectrum_canvas.visible_spectrum = dictionary.dup
@@ -720,42 +721,35 @@ class Reader < FXMainWindow
 		end
 	end
 	
-	def open_spectrum(id)
+	def open_spectrum(spectrum)
 		
-		# select current spectrum in list
-		item = @tree_list_box.findItem(id)
-		@tree_list_box.setCurrentItem(item)
+		# # FIXME select current spectrum in list
+    # item = @tree_list_box.findItem(id)
+    # @tree_list_box.setCurrentItem(item)
 		
-		# find spectrum by id
-		spectrum = nil
-		@imzml.spectrums.each do |s|
-			spectrum = s if s.id == id
-		end
+    # TODO remove
+    # # find spectrum by id
+    # spectrum = nil
+    # @imzml.spectrums.each do |s|
+    #   spectrum = s if s.id == id
+    # end
 		
-		# display spectrum on image
-		spectrum_to_image_point(spectrum)
-		@selected_x, @selected_y = spectrum_to_image_point(spectrum)
-		@image_canvas.update
+    # # FIXME display spectrum on image
+    # spectrum_to_image_point(spectrum)
+    # @selected_x, @selected_y = spectrum_to_image_point(spectrum)
+    # @image_canvas.update
 		
-		# load spectrum data
-		if spectrum
-			mz_array = spectrum.mz_array(@datapath)
-			intensity_array = spectrum.intensity_array(@datapath)
+    # load spectrum data
+    zipped_array = spectrum.mz_binary.data.zip(spectrum.intensity_binary.data)
 			
-			zipped_array = mz_array.zip(intensity_array)
+    array = zipped_array.flatten
+    hash = Hash.new
+    array.each_with_index {|item, index| hash[item] = array[index + 1] if index % 2 == 0 }
+    @spectrum = hash
+    @original_spectrum = hash.dup
+    @spectrum_canvas.visible_spectrum = hash.dup
 			
-			array = zipped_array.flatten
-			hash = Hash.new
-			array.each_with_index {|item, index| hash[item] = array[index + 1] if index % 2 == 0 }
-			dictionary = hash
-			@spectrum = dictionary
-			@original_spectrum = dictionary.dup
-			@spectrum_canvas.visible_spectrum = dictionary.dup
-			
-			update_visible_spectrum
-		else
-			raise "spectrum with ID #{id} not found"
-		end
+    update_visible_spectrum
 		
 	end
 	
@@ -787,27 +781,22 @@ class Reader < FXMainWindow
 	end
 	
 	def read_file(filepath)
+    pp "reading file #{filepath}"
 		
 		reset_to_default_values
 		
 		log("Parsing imzML file") do
-			@filename = filepath.split("/").last
-			self.title = @filename
-			@datapath = filepath.gsub(/imzML$/, "ibd")
-			imzml_parser = ImzML::Parser.new
-			File.open(filepath, 'r') do |f|
-				Ox.sax_parse(imzml_parser, f)
-			end
-			
-			@imzml = imzml_parser.metadata
-			
-			@imzml.spectrums.each do |s|
-				@tree_list_box.appendItem(nil, s.id)
+			self.title = filepath.split("/").last
+      
+      @metadata = ImzML::Parser.new(filepath).metadata
+      
+			@metadata.spectrums.each do |k, v|
+				@tree_list_box.appendItem(nil, k.to_s)
 			end
 			
 		end
-		
-		open_spectrum(@imzml.spectrums.first.id)
+    
+		open_spectrum(@metadata.spectrums.values.first)
 		# create_average_spectrum
 		create_image
 		

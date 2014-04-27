@@ -1,5 +1,6 @@
 source "https://rubygems.org"
-gem 'ox'
-gem 'fxruby'
-gem 'minitest'
-gem 'rinruby'
+gem "ox"
+gem "fxruby"
+gem "minitest"
+gem "rinruby"
+gem "imzml"
