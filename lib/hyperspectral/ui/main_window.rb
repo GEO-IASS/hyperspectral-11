@@ -27,7 +27,7 @@ include Fox
 
 module Hyperspectral
 
-  class Reader < Fox::FXMainWindow
+  class Reader < FXMainWindow
 	
     attr_reader :smoothing_methods
     attr_accessor :selected_smoothing
@@ -35,8 +35,49 @@ module Hyperspectral
     def initialize(app)
 		
       super(app, "imzML Hyperspectral", :width => 800, :height => 600)
-      add_menu_bar
+      
+      menu = MenuBar.new(self)
+      menu.when_file_opens = proc do |filepath|
+        run_on_background do
+          read_file(filepath)
+        end
+      end
+      menu.when_image_save = proc do |filepath|
+        FXFileStream.open(filepath, FXStreamSave) do |outfile|
+          image = FXPNGImage.new(getApp(), :width => @image.width, :height => @image.height)
+          image.setPixels(@image.pixels)
+          size = @metadata.scan_settings.first.image.size
+          image.scale(size.x, size.y)
+          image.savePixels(outfile)
+        end
+      end
+      menu.when_spectrum_save = proc do |filepath|
+        CSV.open(filepath, "wb") do |csv|
+          @spectrum.each{|key, value| csv << [key, value]}
+        end
+      end
+      menu.when_exit = proc do
+        exit
+      end
+      menu.when_template_loaded = proc do |filepath|
+        # read CSV file and fill table with data
+        @calibration_points = Array.new
+        @table.removeRows(0, @table.numRows)
+        CSV.read(filepath, {:skip_blanks => true}).each_with_index do |row, i|
+          @table.appendRows
+          @table.setItemText(i, CALIBRATION_COLUMN_SELECTED, "0.0")
+          @table.setItemText(i, CALIBRATION_COLUMN_DIFF, "0.0")
+          @table.setItemText(i, CALIBRATION_COLUMN_ORIGIN, row[1])
+          @table.setItemText(i, CALIBRATION_COLUMN_PEPTID, row[0])
+			
+          # FIXME debug
+          @table.setItemText(i, CALIBRATION_COLUMN_SELECTED, row[2])
+          @calibration_points << row[2].to_f
+        end
 		
+        @spectrum_canvas.update
+      end
+    
       # init smoothing methods
       @smoothing_methods = [nil, Hyperspectral::Smoothing::MovingAverage.new, Hyperspectral::Smoothing::SavitzkyGolay.new]
 		
@@ -67,119 +108,6 @@ module Hyperspectral
       # status bar
       status_bar = FXStatusBar.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FIX_HEIGHT, :height => 30)
       @status_line = status_bar.statusLine
-    end
-	
-    def add_menu_bar
-      menu_bar = FXMenuBar.new(self, LAYOUT_SIDE_TOP|LAYOUT_FILL_X)
-		
-      # file menu (fold)
-      file_menu = FXMenuPane.new(self)
-      FXMenuTitle.new(menu_bar, "File", :popupMenu => file_menu)
-		
-      # open file menu
-      FXMenuCommand.new(file_menu, "Open...").connect(SEL_COMMAND) do
-        dialog = FXFileDialog.new(self, "Open imzML file")
-        dialog.directory = "#{DEFAULT_DIR}"
-        dialog.patternList = ["imzML files (*.imzML)"]
-			
-        # after success on opening
-        if (dialog.execute != 0)
-				
-          # show progress dialog and starts thread
-          run_on_background do
-            read_file(dialog.filename)
-          end
-        end
-      end
-		
-      FXMenuSeparator.new(file_menu)
-		
-      FXMenuCommand.new(file_menu, "Save image...").connect(SEL_COMMAND) do
-        saveDialog = FXFileDialog.new(self, "Save as PNG")
-        saveDialog.patternList = ["PNG files (*.png)"]
-        if @image
-          if saveDialog.execute != 0
-            FXFileStream.open(saveDialog.filename, FXStreamSave) do |outfile|
-              image = FXPNGImage.new(getApp(), :width => @image.width, :height => @image.height)
-              image.setPixels(@image.pixels)
-              size = @metadata.scan_settings.first.image.size
-              image.scale(size.x, size.y)
-              image.savePixels(outfile)
-            end
-          end
-        end
-      end
-		
-      FXMenuCommand.new(file_menu, "Save spectrum ...").connect(SEL_COMMAND) do
-        saveDialog = FXFileDialog.new(self, "Save as CSV")
-        saveDialog.patternList = ["CSV files (*.csv)"]
-        if @spectrum
-          if saveDialog.execute != 0
-            CSV.open(saveDialog.filename, "wb") do |csv|
-              @spectrum.each{|key, value| csv << [key, value]}
-            end
-          end
-        end
-      end
-		
-      FXMenuSeparator.new(file_menu)
-		
-      exit_cmd = FXMenuCommand.new(file_menu, "Exit")
-      exit_cmd.connect(SEL_COMMAND) {exit}
-      # file menu (end)
-		
-      # calibration menu (fold)
-      calibration_menu = FXMenuPane.new(self)
-      FXMenuTitle.new(menu_bar, "Calibration", :popupMenu => calibration_menu)
-		
-      FXMenuCommand.new(calibration_menu, "Load template").connect(SEL_COMMAND) do
-        dialog = FXFileDialog.new(self, "Open calibration file...")
-        dialog.directory = "#{DEFAULT_DIR}"
-        dialog.patternList = ["CSV (*.csv)"]
-			
-        # after success on opening
-        if (dialog.execute != 0)
-				
-          # read CSV file and fill table with data
-          @calibration_points = Array.new
-          @table.removeRows(0, @table.numRows)
-          CSV.read(dialog.filename, {:skip_blanks => true}).each_with_index do |row, i|
-            @table.appendRows
-            @table.setItemText(i, CALIBRATION_COLUMN_SELECTED, "0.0")
-            @table.setItemText(i, CALIBRATION_COLUMN_DIFF, "0.0")
-            @table.setItemText(i, CALIBRATION_COLUMN_ORIGIN, row[1])
-            @table.setItemText(i, CALIBRATION_COLUMN_PEPTID, row[0])
-					
-            # FIXME debug
-            @table.setItemText(i, CALIBRATION_COLUMN_SELECTED, row[2])
-            @calibration_points << row[2].to_f
-          end
-				
-          @spectrum_canvas.update
-        end
-      end
-		
-      # debug menu
-		
-      debug_menu = FXMenuPane.new(self)
-      FXMenuTitle.new(menu_bar, "DEBUG", :popupMenu => debug_menu)
-		
-		
-      # TODO implement	
-      # FXMenuCommand.new(calibration_menu, "Load calibration file").connect(SEL_COMMAND) do
-      # dialog = FXFileDialog.new(self, "Open calibration file...")
-      # dialog.directory = "#{DEFAULT_DIR}"
-      # dialog.patternList = ["YAML (*.yaml, *.yml)"]
-      # 
-      # # after success on opening
-      # if (dialog.execute != 0)
-      # 	
-      # 	p "opening #{dialog.filename}"
-      # 	@spectrum_canvas.update
-      # end
-      # end
-      # calibration menu (end)
-		
     end
 	
     def add_image_part
@@ -306,21 +234,21 @@ module Hyperspectral
       matrix.numRows = 3
 		
       # smoothing radio choices
-      self.selected_smoothing = FXDataTarget.new(0)
-      self.selected_smoothing.connect(SEL_COMMAND) do |sender, sel, event|
+      @selected_smoothing = FXDataTarget.new(0)
+      @selected_smoothing.connect(SEL_COMMAND) do |sender, sel, event|
 			
         # redraw spectrum with preview
-        @spectrum_canvas.smoothing = self.smoothing_methods[sender.value]
+        @spectrum_canvas.smoothing = @smoothing_methods[sender.value]
         @spectrum_canvas.reset_cache
         @spectrum_canvas.update
       end
 		
       # add smoothing methods to the matrix
-      self.smoothing_methods.each_with_index do |value, index|
+      @smoothing_methods.each_with_index do |value, index|
 			
         # for no smoothing set the name
         name = value.nil? ? "None" : value.name
-        radio_button = FXRadioButton.new(matrix, name, self.selected_smoothing, FXDataTarget::ID_OPTION + index)
+        radio_button = FXRadioButton.new(matrix, name, @selected_smoothing, FXDataTarget::ID_OPTION + index)
 			
         # by default select no smoothing
         radio_button.checkState = true if value.nil? == 0
@@ -772,7 +700,7 @@ module Hyperspectral
 		
       log("Parsing imzML file") do
         self.title = filepath.split("/").last
-      
+
         @metadata = ImzML::Parser.new(filepath).metadata
       
         @metadata.spectrums.each do |k, v|

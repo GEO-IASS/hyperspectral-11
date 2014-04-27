@@ -18,6 +18,7 @@ require "hyperspectral/smoothing/savitzky_golay"
 
 require "hyperspectral/ui/spectrum_canvas"
 require "hyperspectral/ui/main_window"
+require "hyperspectral/ui/menu_bar"
 
 # TODO debug
 if __FILE__ == $0
