@@ -1,8 +1,6 @@
 module Hyperspectral
 
-  include Fox
-
-  class SpectrumCanvas < FXCanvas
+  class SpectrumCanvas < Fox::FXCanvas
 
     # The currently displayed full spectrum
     attr_accessor :spectrum
@@ -15,11 +13,11 @@ module Hyperspectral
 
     # Init method
     #
-    # superview - instance of FXWindo
+    # superview - instance of Fox::FXWindo
     def initialize(superview)
-      super(superview, :opts => LAYOUT_FILL)
+      super(superview, :opts => Fox::LAYOUT_FILL)
 
-      @font = FXFont.new(app, "times")
+      @font = Fox::FXFont.new(app, "times")
       @font.create
 
       # default state
@@ -28,12 +26,12 @@ module Hyperspectral
       @zoom_from = @zoom_from = nil
 
       # bind events methods
-      connect(SEL_PAINT, method(:draw))
-      connect(SEL_LEFTBUTTONPRESS, method(:mouse_pressed))
-      connect(SEL_LEFTBUTTONRELEASE, method(:mouse_released))
-      connect(SEL_RIGHTBUTTONPRESS, method(:mouse_pressed))
-      connect(SEL_RIGHTBUTTONRELEASE, method(:mouse_released))
-      connect(SEL_MOTION, method(:mouse_moved))
+      connect(Fox::SEL_PAINT, method(:draw))
+      connect(Fox::SEL_LEFTBUTTONPRESS, method(:mouse_pressed))
+      connect(Fox::SEL_LEFTBUTTONRELEASE, method(:mouse_released))
+      connect(Fox::SEL_RIGHTBUTTONPRESS, method(:mouse_pressed))
+      connect(Fox::SEL_RIGHTBUTTONRELEASE, method(:mouse_released))
+      connect(Fox::SEL_MOTION, method(:mouse_moved))
 
     end
 
@@ -164,18 +162,18 @@ module Hyperspectral
     #
     # Returns nothing
     def draw(sender, sel, event)
-      FXDCWindow.new(sender, event) do |dc|
+      Fox::FXDCWindow.new(sender, event) do |dc|
 
         # ===================
         # = draw background =
         # ===================
-        dc.foreground = FXColor::White
+        dc.foreground = Fox::FXColor::White
         dc.fillRectangle(0, 0, sender.width, sender.height)
 
         # =====================
         # = draw x and y axis =
         # =====================
-        dc.foreground = FXColor::Black
+        dc.foreground = Fox::FXColor::Black
         dc.drawLine(AXIS_PADDING, sender.height - AXIS_PADDING, sender.width - AXIS_PADDING, sender.height - AXIS_PADDING)
         dc.drawLine(AXIS_PADDING, sender.height - AXIS_PADDING, AXIS_PADDING, AXIS_PADDING)
         dc.font = @font
@@ -201,7 +199,7 @@ module Hyperspectral
             # mz = @calibration.recalculate(mz) if @calibration
             point = spectrum_point_to_canvas([mz, intensity])
             # do not draw the same point twice
-            points << FXPoint.new(point[0].to_i, point[1].to_i)
+            points << Fox::FXPoint.new(point[0].to_i, point[1].to_i)
             # previous_point = point
           end
 
@@ -212,7 +210,7 @@ module Hyperspectral
           #   keys = @spectrum.keys
           #   @smoothing.apply(preview_values, @smoothing_window_size).each_with_index do |intensity, index|
           #     point = spectrum_point_to_canvas([keys[index], intensity])
-          #     preview_points << FXPoint.new(point[0].to_i, point[1].to_i)
+          #     preview_points << Fox::FXPoint.new(point[0].to_i, point[1].to_i)
           #   end
           # end
 
@@ -254,11 +252,11 @@ module Hyperspectral
         # ======================
         # = draw spectrum line =
         # ======================
-        dc.foreground = FXColor::Red
+        dc.foreground = Fox::FXColor::Red
         dc.drawLines(points)
 
         ## FIXME
-        # dc.foreground = FXColor::Blue
+        # dc.foreground = Fox::FXColor::Blue
         # dc.drawLines(preview_points)
 
         # ====================
@@ -266,7 +264,7 @@ module Hyperspectral
         # ====================
         if @peaks
           @peaks.each do |p|
-            draw_selected_line(dc, [p, 0], 0, FXColor::Blue)
+            draw_selected_line(dc, [p, 0], 0, Fox::FXColor::Blue)
           end
         end
 
@@ -274,8 +272,8 @@ module Hyperspectral
         # = draw zoom rect =
         # ==================
         if @zoom_from && @zoom_to
-          dc.lineStyle = LINE_ONOFF_DASH
-          dc.foreground = FXColor::Magenta
+          dc.lineStyle = Fox::LINE_ONOFF_DASH
+          dc.foreground = Fox::FXColor::Magenta
           zoom_from, zoom_to = @zoom_from, @zoom_to
           width = (@zoom_to - @zoom_from).abs
 
@@ -286,26 +284,26 @@ module Hyperspectral
         end
 
         # draw selected fixed line
-        draw_selected_line(dc, @selected_fixed_point, @selected_fixed_interval, FXColor::LightGrey)
+        draw_selected_line(dc, @selected_fixed_point, @selected_fixed_interval, Fox::FXColor::LightGrey)
 
         # =======================
         # = draw selected lines =
         # =======================
         @selected_points.each do |x|
           spectrum_point = [x, 0]
-          draw_selected_line(dc, spectrum_point, 0, FXColor::SteelBlue)
+          draw_selected_line(dc, spectrum_point, 0, Fox::FXColor::SteelBlue)
         end if @selected_points
 
         ## FIXME
         # # draw selected line
         # # if @tabbook.current == TAB_BASICS
-        # draw_selected_line(dc, @selected_point, @selected_interval, FXColor::SteelBlue)
+        # draw_selected_line(dc, @selected_point, @selected_interval, Fox::FXColor::SteelBlue)
         # # end
 
         # FIXME smoothing
         # # draw smoothing preview
         # if @tabbook.current == TAB_SMOOTHING
-        #   dc.foreground = FXColor::Blue
+        #   dc.foreground = Fox::FXColor::Blue
         #   dc.drawLine(0,0, 100, 100)
         # end
 
@@ -313,7 +311,7 @@ module Hyperspectral
         # # draw calibration lines
         # if @calibration_points.size > 0 && @tabbook.current == TAB_CALIBRATIONS
         #   @calibration_points.compact.each do |point|
-        #     draw_selected_line(dc, [point, 0], 0, FXColor::Green)
+        #     draw_selected_line(dc, [point, 0], 0, Fox::FXColor::Green)
         #   end
         # end
 
@@ -329,15 +327,15 @@ module Hyperspectral
           text_height = @font.getTextHeight(position_text)
 
           # draw rectangle under the position text
-          dc.foreground = dc.background = FXColor::White
+          dc.foreground = dc.background = Fox::FXColor::White
           dc.fillRectangle(mouse_point[0], mouse_point[1] - text_height, text_width + 2 * LABEL_X_PADDING, text_height + LABEL_Y_PADDING)
 
           # draw the actual value
-          dc.foreground = FXColor::LightSlateGray
+          dc.foreground = Fox::FXColor::LightSlateGray
           dc.drawText(mouse_point[0] + LABEL_X_PADDING, mouse_point[1] - LABEL_Y_PADDING, position_text)
 
           # draw lines
-          dc.lineStyle = LINE_ONOFF_DASH
+          dc.lineStyle = Fox::LINE_ONOFF_DASH
           dc.drawLine(mouse_point[0], 0, mouse_point[0], self.height)
           dc.drawLine(0, mouse_point[1], self.width, mouse_point[1])
         end
@@ -401,7 +399,6 @@ module Hyperspectral
     def spectrum_point_to_canvas(spectrum_point)
 
       # if spectrum was not yet loaded
-      p "abs #{(@spectrum_max_x - @spectrum_min_x).abs}"
       return [0, 0] unless @spectrum_min_x && spectrum_max_x && (@spectrum_max_x - @spectrum_min_x).abs > 0
 
       # map points
@@ -427,7 +424,7 @@ module Hyperspectral
 
     # Drawing vertical line, used for selection of specific part of spectrum
     #
-    # context - instance of FXDCWindow
+    # context - instance of Fox::FXDCWindow
     # selected_point - selected point in spectrum domain
     # selected_interval - selected interval in spectrum domain
     # color - which color to use for the line

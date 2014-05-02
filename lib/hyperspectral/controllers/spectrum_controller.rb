@@ -8,29 +8,30 @@ module Hyperspectral
     # Load all views controller by this controller
     def load_view(superview)
 
-      horizontal_frame = FXHorizontalFrame.new(superview,
-        :opts => LAYOUT_FILL_X | LAYOUT_FILL_Y | LAYOUT_BOTTOM | LAYOUT_RIGHT
+      horizontal_frame = Fox::FXHorizontalFrame.new(superview,
+        :opts => Fox::LAYOUT_FILL_X | Fox::LAYOUT_FILL_Y | Fox::LAYOUT_BOTTOM |
+          Fox::LAYOUT_RIGHT
       )
 
       @spectrum_canvas = Hyperspectral::SpectrumCanvas.new(horizontal_frame)
       @spectrum_canvas.show_cross = true
 
-      buttons_frame = FXVerticalFrame.new(horizontal_frame,
-        :opts => LAYOUT_FIX_WIDTH | LAYOUT_FILL_Y,
+      buttons_frame = Fox::FXVerticalFrame.new(horizontal_frame,
+        :opts => Fox::LAYOUT_FIX_WIDTH | Fox::LAYOUT_FILL_Y,
         :width => 50)
 
-      zoom_in_button = FXButton.new(buttons_frame, "+",
-        :opts => FRAME_RAISED | LAYOUT_FILL
+      zoom_in_button = Fox::FXButton.new(buttons_frame, "+",
+        :opts => Fox::FRAME_RAISED | Fox::LAYOUT_FILL
       )
-      zoom_in_button.connect(SEL_COMMAND, method(:zoom_in_pressed))
-      zoom_reset_buttom = FXButton.new(buttons_frame, "100%",
-        :opts => FRAME_RAISED | LAYOUT_FILL
+      zoom_in_button.connect(Fox::SEL_COMMAND, method(:zoom_in_pressed))
+      zoom_reset_buttom = Fox::FXButton.new(buttons_frame, "100%",
+        :opts => Fox::FRAME_RAISED | Fox::LAYOUT_FILL
       )
-      zoom_reset_buttom.connect(SEL_COMMAND, method(:zoom_reset_pressed))
-      zoom_out_button = FXButton.new(buttons_frame, "-",
-        :opts => FRAME_RAISED | LAYOUT_FILL
+      zoom_reset_buttom.connect(Fox::SEL_COMMAND, method(:zoom_reset_pressed))
+      zoom_out_button = Fox::FXButton.new(buttons_frame, "-",
+        :opts => Fox::FRAME_RAISED | Fox::LAYOUT_FILL
       )
-      zoom_out_button.connect(SEL_COMMAND, method(:zoom_out_pressed))
+      zoom_out_button.connect(Fox::SEL_COMMAND, method(:zoom_out_pressed))
 
       # FIXME debug
       # @spectrum_canvas.selected_points = [1.2, 2.2, 3.4]

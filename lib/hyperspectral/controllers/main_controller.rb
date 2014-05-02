@@ -1,20 +1,17 @@
 module Hyperspectral
 
-  include Fox
-
-  class MainController < FXMainWindow
+  class MainController < Fox::FXMainWindow
 
     def initialize(app)
       super(app, "imzML Hyperspectral", :width => 800, :height => 600)
       load_view(self)
 
-      connect(SEL_CONFIGURE, method(:window_size_changed))
-
+      connect(Fox::SEL_CONFIGURE, method(:window_size_changed))
     end
 
     def create
       super
-      show(PLACEMENT_VISIBLE)
+      show(Fox::PLACEMENT_VISIBLE)
 
       # FIXME debug
       open_file(nil)
@@ -38,7 +35,14 @@ module Hyperspectral
       # ==============
       # = MAIN FRAME =
       # ==============
-      vertical_frame = FXVerticalFrame.new(superview, :opts => LAYOUT_FILL)
+      vertical_frame = Fox::FXVerticalFrame.new(superview, :opts => Fox::LAYOUT_FILL)
+      top_frame = Fox::FXHorizontalFrame.new(vertical_frame, :opts => Fox::LAYOUT_FILL_X)
+
+      # ====================
+      # = IMAGE CONTROLLER =
+      # ====================
+      @image_controller = ImageController.new
+      @image_controller.load_view(top_frame)
 
       # =======================
       # = SPECTRUM CONTROLLER =
@@ -56,15 +60,11 @@ module Hyperspectral
 
       # FIXME debug
       @spectrum_controller.points = Hash[1, 2, 2, 5, 3, 3, 4, 3, 5, 2, 6, 1, 7, 4, 8, 3, 9, 1, 10, 4, 11, 6, 12, 8, 13, 2]
-      pp @spectrum_controller.points
+      p @spectrum_controller.points
 
       # @metadata.spectrums.each do |k, v|
       #   @tree_list_box.appendItem(nil, k.to_s)
       # end
-    end
-
-    def window_size_changed(sender, selector, event)
-      @spectrum_controller.needs_display
     end
 
     private
@@ -80,6 +80,11 @@ module Hyperspectral
 
     # help variables
     attr_accessor :mutex
+
+    def window_size_changed(sender, selector, event)
+      @spectrum_controller.needs_display
+      @image_controller.need_display
+    end
 
   end
 
