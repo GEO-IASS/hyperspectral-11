@@ -10,6 +10,9 @@ module Hyperspectral
     # Array with selectd points, after change, display it on spectrum canvas
     attr_accessor :selected_points
 
+    # Interval which may be used to draw the image
+    attr_accessor :selected_interval
+
     def points=(points)
       @points = points
       @spectrum_canvas.spectrum = points
@@ -19,6 +22,11 @@ module Hyperspectral
     def selected_points=(points)
       @selected_points = points
       @spectrum_canvas.selected_points = points
+    end
+
+    def selected_interval=(interval)
+      @selected_interval = interval
+      @spectrum_canvas.selected_interval = interval
     end
 
     # Load all views controller by this controller
@@ -53,8 +61,6 @@ module Hyperspectral
       )
       zoom_out_button.connect(Fox::SEL_COMMAND, method(:zoom_out_pressed))
 
-      # FIXME debug
-      # @spectrum_canvas.selected_points = [1.2, 2.2, 3.4]
       needs_display
     end
 

@@ -13,6 +13,9 @@ module Hyperspectral
     # Array of selected point (in spectrum coords) which should be drawn
     attr_accessor :selected_points
 
+    # When selecting point for image drawing the interval value is sometimes needed
+    attr_accessor :selected_interval
+
     # Bool determinig if the position cross with coordinates is shown
     attr_accessor :show_cross
 
@@ -30,6 +33,7 @@ module Hyperspectral
       @pressed = NO_MOUSE
       @zoom_from = @zoom_from = nil
       @mode = :single_selection
+      @selected_interval = 0
 
       # bind events methods
       connect(Fox::SEL_PAINT, method(:draw))
@@ -50,6 +54,12 @@ module Hyperspectral
 
     def selected_points=(points)
       @selected_points = points
+      self.update
+    end
+
+    # Redraw canvas after interval selection
+    def selected_interval=(interval)
+      @selected_interval = interval
       self.update
     end
 
@@ -137,7 +147,7 @@ module Hyperspectral
 
     # Helper properties for displaying the selection with interval
     attr_accessor :selected_point, :selected_fixed_point,
-      :selected_fixed_interval, :selected_interval
+      :selected_fixed_interval
 
     # Found peaks to draw
     attr_accessor :peaks
@@ -266,11 +276,12 @@ module Hyperspectral
         # ====================
         # = draw found peaks =
         # ====================
-        if @peaks
-          @peaks.each do |p|
-            draw_selected_line(dc, [p, 0], 0, Fox::FXColor::Blue)
-          end
-        end
+        ## FIXME
+        # if @peaks
+        #   @peaks.each do |p|
+        #     draw_selected_line(dc, [p, 0], 0, Fox::FXColor::Blue)
+        #   end
+        # end
 
         # ==================
         # = draw zoom rect =
@@ -295,14 +306,8 @@ module Hyperspectral
         # =======================
         @selected_points.each do |x|
           spectrum_point = [x, 0]
-          draw_selected_line(dc, spectrum_point, 0, Fox::FXColor::SteelBlue)
+          draw_selected_line(dc, spectrum_point, @selected_interval, Fox::FXColor::SteelBlue)
         end if @selected_points
-
-        ## FIXME
-        # # draw selected line
-        # # if @tabbook.current == TAB_BASICS
-        # draw_selected_line(dc, @selected_point, @selected_interval, Fox::FXColor::SteelBlue)
-        # # end
 
         # FIXME smoothing
         # # draw smoothing preview
@@ -446,6 +451,12 @@ module Hyperspectral
       return unless selected_point
       point = spectrum_point_to_canvas(selected_point)
 
+      # save the styles config
+      prev_fill = context.fillStyle
+      prev_stipple = context.stipple
+      prev_color = context.foreground
+      prev_line = context.lineStyle
+
       context.lineStyle = Fox::LINE_SOLID
       context.foreground = color
       context.stipple = Fox::STIPPLE_NONE
@@ -472,13 +483,21 @@ module Hyperspectral
         selected_point[1]]
       )
 
-      context.fillStyle = FILL_STIPPLED
-      context.stipple = STIPPLE_2
+
+      context.fillStyle = Fox::FILL_STIPPLED
+
+      context.stipple = Fox::STIPPLE_2
       context.fillRectangle(interval_from[0],
         AXIS_PADDING - 1,
         interval_to[0] - interval_from[0],
         self.height - 2 * AXIS_PADDING
       )
+
+      # set the styles back
+      context.stipple = prev_stipple
+      context.fillStyle = prev_fill
+      context.foreground = prev_color
+      context.lineStyle = prev_line
     end
 
     # Checks if the canvas x value does not overlaps the graph dimension, if so

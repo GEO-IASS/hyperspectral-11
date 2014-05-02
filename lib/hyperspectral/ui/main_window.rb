@@ -74,7 +74,6 @@ module Hyperspectral
           @table.setItemText(i, CALIBRATION_COLUMN_ORIGIN, row[1])
           @table.setItemText(i, CALIBRATION_COLUMN_PEPTID, row[0])
 
-          # FIXME debug
           @table.setItemText(i, CALIBRATION_COLUMN_SELECTED, row[2])
           @calibration_points << row[2].to_f
         end
@@ -377,7 +376,6 @@ module Hyperspectral
 
       # calibration tab (end)
 
-      # FIXME debug
       @tabbook.setCurrent(TAB_BASICS)
     end
 
@@ -522,7 +520,6 @@ module Hyperspectral
 
       show(PLACEMENT_VISIBLE)
 
-      # FIXME debug
       run_on_background do
         read_file(DEBUG_DIR)
       end

@@ -10,7 +10,7 @@ module Hyperspectral
 
     def selected_value=(value)
       @selected_value = value
-      @mz_value_textfield.text = value.to_s
+      @mz_textfield.text = value.to_s
     end
 
     def load_view(superview)
@@ -23,36 +23,44 @@ module Hyperspectral
       matrix.numColumns = 2
       matrix.numRows = 4
 
+      # ================
+      # = MZ textfield =
+      # ================
       Fox::FXLabel.new(matrix, "m/z value", nil, Fox::LAYOUT_CENTER_Y |
         Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT | Fox::LAYOUT_FILL_ROW
       )
-      @mz_value_textfield = Fox::FXTextField.new(matrix, 30,
+      @mz_textfield = Fox::FXTextField.new(matrix, 30,
         :opts => Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X |
           Fox::FRAME_SUNKEN | Fox::FRAME_THICK | Fox::TEXTFIELD_REAL |
           Fox::LAYOUT_FILL
       )
-
-      @mz_value_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+      @mz_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
         if sender.text.size > 0
           callback(:when_changed_mz_value, sender.text.to_f)
         end
       end
-    #
-    #   Fox::FXLabel.new(matrix, "interval value", nil,
-    #     Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT |
-    #     Fox::LAYOUT_FILL_ROW
-    #   )
-    #   @interval_textfield = Fox::FXTextField.new(matrix, 10,
-    #     :opts => Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X |
-    #       Fox::FRAME_SUNKEN | Fox::FRAME_THICK | Fox::TEXTFIELD_REAL |
-    #       Fox::LAYOUT_FILL
-    #   )
-    #   @interval_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-    #     if sender.text.size > 0f
-    #       @spectrum_canvas.selected_interval = sender.text.to_f
-    #       @spectrum_canvas.update
-    #     end
-    #   end
+
+      # ======================
+      # = Interval textfield =
+      # ======================
+      Fox::FXLabel.new(matrix, "interval value", nil,
+        Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT |
+        Fox::LAYOUT_FILL_ROW
+      )
+      @interval_textfield = Fox::FXTextField.new(matrix, 10,
+        :opts => Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X |
+          Fox::FRAME_SUNKEN | Fox::FRAME_THICK | Fox::TEXTFIELD_REAL |
+          Fox::LAYOUT_FILL
+      )
+      @interval_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+        if sender.text.size > 0
+          callback(:when_changed_interval_value, sender.text.to_f)
+        end
+      end
+
+      # =====================
+      # = Spectrum selector =
+      # =====================
     #
     #   Fox::FXLabel.new(matrix, "selected spectrum", nil,
     #     Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT |
@@ -108,7 +116,8 @@ module Hyperspectral
 
     private
 
-    attr_accessor :mz_value_textfield
+    # References to the meaningful subviews
+    attr_accessor :mz_value_textfield, :interval_textfield
 
   end
 
