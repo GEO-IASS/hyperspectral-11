@@ -19,13 +19,7 @@ module Hyperspectral
       # @interpret.filename = "#{File.expand_path( File.dirname(__FILE__) + '/../../data/')}/#{filename}"
       
       # p @interpret.filename
-      p @interpret.exampleMS = spectrum
-      
-      @interpret.eval %Q{
-        # csv = read.csv(filename, colClasses = c('character', 'numeric'))
-        exampleMS = matrix(csv$V1)
-      }
-    
+      @interpret.exampleMS = spectrum
       @interpret.topScale = PeakDetector::DEFAULT_SCALES_TOP
       @interpret.SNRatio = PeakDetector::DEFAULT_SNRATIO
 

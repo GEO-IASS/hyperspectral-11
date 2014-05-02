@@ -1,8 +1,6 @@
 IMAGE_WIDTH = 300
 IMAGE_HEIGHT = 300
-AXIS_PADDING = 30
-LABEL_X_EVERY = 10
-LABEL_Y_EVERY = 4
+
 COLUMN_DEFAULT_WIDTH = 80
 DEFAULT_DIR = "/Users/beny/Dropbox/School/dp/imzML"
 DEBUG_DIR = "/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML"
@@ -32,17 +30,23 @@ module Hyperspectral
     attr_reader :smoothing_methods
     attr_accessor :selected_smoothing
 		
-    def initialize(app)
-		
+    def initialize(app)		
       super(app, "imzML Hyperspectral", :width => 800, :height => 600)
       
+      # initialize semaphore for further thread synchronizations
+      @mutex = Mutex.new
+      
+      # ========
+      # = MENU =
+      # ========
       menu = MenuBar.new(self)
-      menu.when_file_opens = proc do |filepath|
+      menu.when_file_opens do |filepath|
         run_on_background do
           read_file(filepath)
         end
       end
-      menu.when_image_save = proc do |filepath|
+      
+      menu.when_image_save do |filepath|
         FXFileStream.open(filepath, FXStreamSave) do |outfile|
           image = FXPNGImage.new(getApp(), :width => @image.width, :height => @image.height)
           image.setPixels(@image.pixels)
@@ -51,15 +55,18 @@ module Hyperspectral
           image.savePixels(outfile)
         end
       end
-      menu.when_spectrum_save = proc do |filepath|
+      
+      menu.when_spectrum_save do |filepath|
         CSV.open(filepath, "wb") do |csv|
           @spectrum.each{|key, value| csv << [key, value]}
         end
       end
-      menu.when_exit = proc do
+      
+      menu.when_exit do
         exit
       end
-      menu.when_template_loaded = proc do |filepath|
+      
+      menu.when_template_loaded do |filepath|
         # read CSV file and fill table with data
         @calibration_points = Array.new
         @table.removeRows(0, @table.numRows)
@@ -83,10 +90,10 @@ module Hyperspectral
 		
       # when window change size, reset the spectrum cache
       self.connect(SEL_CONFIGURE) do
-        @spectrum_canvas.reset_cache
+        
+        ## FIXME remove
+        # @spectrum_canvas.reset_cache
       end
-		
-      @mutex = Mutex.new
 		
       # progress dialog
       @progress_dialog = FXProgressDialog.new(self, "Please wait", "Loading data")
@@ -101,9 +108,12 @@ module Hyperspectral
 		
       @main_frame = FXVerticalFrame.new(self, :opts => LAYOUT_FILL)
 		
+      @spectrum_controller = SpectrumController.new
+      @spectrum_controller.load_view(@main_frame)
+    
       # create main UI parts
       add_image_part
-      add_spectrum_part
+      # add_spectrum_part
 		
       # status bar
       status_bar = FXStatusBar.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FIX_HEIGHT, :height => 30)
@@ -239,7 +249,9 @@ module Hyperspectral
 			
         # redraw spectrum with preview
         @spectrum_canvas.smoothing = @smoothing_methods[sender.value]
-        @spectrum_canvas.reset_cache
+        
+        ## FIXME remove
+        # @spectrum_canvas.reset_cache
         @spectrum_canvas.update
       end
 		
@@ -266,7 +278,9 @@ module Hyperspectral
 			
         # when value of window size change, update the graph
         @spectrum_canvas.smoothing_window_size = sender.text.to_i
-        @spectrum_canvas.reset_cache
+        
+        ## FIXME remove
+        # @spectrum_canvas.reset_cache
         @spectrum_canvas.update
       end
 		
@@ -353,7 +367,9 @@ module Hyperspectral
         @spectrum = @original_spectrum.dup
         @spectrum_canvas.visible_spectrum = @spectrum.dup
         @image_canvas.update
-        @spectrum_canvas.reset_cache
+        
+        ## FIXME remove
+        # @spectrum_canvas.reset_cache
         @spectrum_canvas.update  
 			
         update_visible_spectrum	 
@@ -368,143 +384,144 @@ module Hyperspectral
       @tabbook.setCurrent(TAB_BASICS)
     end
 	
-    def add_spectrum_part
-		
-      @font = FXFont.new(app, "times")
-      @font.create
-		
-      # spectrum part
-      bottom_horizontal_frame = FXHorizontalFrame.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
-		
-      # @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
-      # @spectrum_canvas.connect(SEL_PAINT, method(:draw_canvas))
-      @spectrum_canvas = Hyperspectral::SpectrumCanvas.new(bottom_horizontal_frame)
-		
-      @spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
-        # FIXME why is the if here, i think it is not necessary
-        # if @spectrum_canvas.spectrum_drawn_points
-        @mouse_left_down = true
-        @spectrum_canvas.grab
-        @spectrum_canvas.zoom_from = @spectrum_canvas.canvas_point_to_spectrum([event.win_x, event.win_y])
-        # end
-      end
-		
-      @spectrum_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
-        if @mouse_left_down
-          @spectrum_canvas.ungrab
-          @mouse_left_down = false
-				
-          update_visible_spectrum
-        end
-      end 
-		
-      @spectrum_canvas.connect(SEL_RIGHTBUTTONPRESS) do |sender, sel, event|
-        @mouse_right_down = true
-        @spectrum_canvas.grab
-        point = [event.win_x, event.win_y]
-        case @tabbook.current
-        when TAB_BASICS
-          @spectrum_canvas.selected_point = @spectrum_canvas.canvas_point_to_spectrum(point)
-        when TAB_CALIBRATIONS
-          choose_calibration_point(@spectrum_canvas.canvas_point_to_spectrum(point).first)			 
-        end
-        @spectrum_canvas.update
-      end
-		
-      @spectrum_canvas.connect(SEL_RIGHTBUTTONRELEASE) do |sender, sel, event|
-        if @mouse_right_down
-          @spectrum_canvas.ungrab
-          @mouse_right_down = false
-          point = [event.win_x, event.win_y]
-				
-          case @tabbook.current
-          when TAB_BASICS then @mz_textfield.text = @spectrum_canvas.selected_point.first.round(ROUND_DIGITS).to_s
-          when TAB_CALIBRATIONS
-            choose_calibration_point(@spectrum_canvas.canvas_point_to_spectrum(point).first)		   
-          end
-        end
-        @spectrum_canvas.update
-      end
-		
-      @spectrum_canvas.connect(SEL_MOTION) do |sender, sel, event|
-        if @mouse_left_down
-          @spectrum_canvas.zoom_to = @spectrum_canvas.canvas_point_to_spectrum([event.win_x, event.win_y])
-          @status_line.text = "Zoom from #{@spectrum_canvas.zoom_from.first} to #{@spectrum_canvas.zoom_to.first}"
-          @spectrum_canvas.update
-        elsif @mouse_right_down
-				
-          point = [event.win_x, event.win_y]
-				
-          case @tabbook.current
-          when TAB_BASICS
-            @spectrum_canvas.selected_point = @spectrum_canvas.canvas_point_to_spectrum(point)
-            @status_line.text = "Selected MZ value #{@spectrum_canvas.selected_point.first.round(ROUND_DIGITS)}"
-          when TAB_CALIBRATIONS
-            choose_calibration_point(@spectrum_canvas.canvas_point_to_spectrum(point).first)		   
-          end
-				
-          @spectrum_canvas.update
-        end
-      end
-		
-      zoom_button_vertical_frame = FXVerticalFrame.new(bottom_horizontal_frame, :opts => LAYOUT_FIX_WIDTH|LAYOUT_FILL_Y, :width => 50)
-		
-      # zoom buttons
-      zoom_in_button = FXButton.new(zoom_button_vertical_frame, "+", :opts => FRAME_RAISED|LAYOUT_FILL)
-      zoom_in_button.connect(SEL_COMMAND) do
-			
-        visible_spectrum = @spectrum_canvas.visible_spectrum.to_a
-			
-        # recalculate zoom in values
-        if (visible_spectrum.size > 4)
-          quarter = (visible_spectrum.last.first - visible_spectrum.first.first) / 4
-          zoom_begin = visible_spectrum.first.first + quarter
-          zoom_end = visible_spectrum.last.first - quarter
-				
-          @spectrum_canvas.zoom_from = [zoom_begin, nil]
-          @spectrum_canvas.zoom_to = [zoom_end, nil]
-				
-          update_visible_spectrum
-        end
-      end
-		
-      zoom_reset_buttom = FXButton.new(zoom_button_vertical_frame, "100%", :opts => FRAME_RAISED|LAYOUT_FILL)
-      zoom_reset_buttom.connect(SEL_COMMAND) do
-        spectrum = @spectrum.to_a
-        @spectrum_canvas.zoom_from = [spectrum.first.first, nil]
-        @spectrum_canvas.zoom_to = [spectrum.last.first, nil]
-			
-        update_visible_spectrum
-      end
-		
-      zoom_out_button = FXButton.new(zoom_button_vertical_frame, "-", :opts => FRAME_RAISED|LAYOUT_FILL)
-      zoom_out_button.connect(SEL_COMMAND) do
-        visible_spectrum = @spectrum_canvas.visible_spectrum.to_a
-        spectrum = @spectrum.to_a
-			
-        # recalculate zoom out values
-        if (visible_spectrum.size > 4)
-          quarter = (visible_spectrum.last.first - visible_spectrum.first.first) / 4
-          zoom_begin = visible_spectrum.first.first - quarter
-          zoom_end = visible_spectrum.last.first + quarter
-				
-          # limit to the spectrum values
-          zoom_begin = spectrum.first.first if zoom_begin < spectrum.first.first
-          zoom_end = spectrum.last.first if zoom_end > spectrum.last.first
-				
-          @spectrum_canvas.zoom_from = [zoom_begin, nil]
-          @spectrum_canvas.zoom_to = [zoom_end, nil]
-				
-          update_visible_spectrum
-        end
-			
-      end
-    end
+    # def add_spectrum_part
+    #     
+    #   @font = FXFont.new(app, "times")
+    #   @font.create
+    #     
+    #   # spectrum part
+    #   bottom_horizontal_frame = FXHorizontalFrame.new(@main_frame, :opts => LAYOUT_FILL_X|LAYOUT_FILL_Y|LAYOUT_BOTTOM|LAYOUT_RIGHT)
+    #     
+    #   # @spectrum_canvas = FXCanvas.new(bottom_horizontal_frame, :opts => LAYOUT_FILL)
+    #   # @spectrum_canvas.connect(SEL_PAINT, method(:draw_canvas))
+    #   @spectrum_canvas = Hyperspectral::SpectrumCanvas.new(bottom_horizontal_frame)
+    #     
+    #   @spectrum_canvas.connect(SEL_LEFTBUTTONPRESS) do |sender, sel, event|
+    #     # FIXME why is the if here, i think it is not necessary
+    #     # if @spectrum_canvas.spectrum_drawn_points
+    #     @mouse_left_down = true
+    #     @spectrum_canvas.grab
+    #     @spectrum_canvas.zoom_from = @spectrum_canvas.canvas_point_to_spectrum([event.win_x, event.win_y])
+    #     # end
+    #   end
+    #     
+    #   @spectrum_canvas.connect(SEL_LEFTBUTTONRELEASE) do |sender, sel, event|
+    #     if @mouse_left_down
+    #       @spectrum_canvas.ungrab
+    #       @mouse_left_down = false
+    #         
+    #       update_visible_spectrum
+    #     end
+    #   end 
+    #     
+    #   @spectrum_canvas.connect(SEL_RIGHTBUTTONPRESS) do |sender, sel, event|
+    #     @mouse_right_down = true
+    #     @spectrum_canvas.grab
+    #     point = [event.win_x, event.win_y]
+    #     case @tabbook.current
+    #     when TAB_BASICS
+    #       @spectrum_canvas.selected_point = @spectrum_canvas.canvas_point_to_spectrum(point)
+    #     when TAB_CALIBRATIONS
+    #       choose_calibration_point(@spectrum_canvas.canvas_point_to_spectrum(point).first)       
+    #     end
+    #     @spectrum_canvas.update
+    #   end
+    #     
+    #   @spectrum_canvas.connect(SEL_RIGHTBUTTONRELEASE) do |sender, sel, event|
+    #     if @mouse_right_down
+    #       @spectrum_canvas.ungrab
+    #       @mouse_right_down = false
+    #       point = [event.win_x, event.win_y]
+    #         
+    #       case @tabbook.current
+    #       when TAB_BASICS then @mz_textfield.text = @spectrum_canvas.selected_point.first.round(ROUND_DIGITS).to_s
+    #       when TAB_CALIBRATIONS
+    #         choose_calibration_point(@spectrum_canvas.canvas_point_to_spectrum(point).first)       
+    #       end
+    #     end
+    #     @spectrum_canvas.update
+    #   end
+    #     
+    #   @spectrum_canvas.connect(SEL_MOTION) do |sender, sel, event|
+    #     if @mouse_left_down
+    #       @spectrum_canvas.zoom_to = @spectrum_canvas.canvas_point_to_spectrum([event.win_x, event.win_y])
+    #       @status_line.text = "Zoom from #{@spectrum_canvas.zoom_from.first} to #{@spectrum_canvas.zoom_to.first}"
+    #       @spectrum_canvas.update
+    #     elsif @mouse_right_down
+    #         
+    #       point = [event.win_x, event.win_y]
+    #         
+    #       case @tabbook.current
+    #       when TAB_BASICS
+    #         @spectrum_canvas.selected_point = @spectrum_canvas.canvas_point_to_spectrum(point)
+    #         @status_line.text = "Selected MZ value #{@spectrum_canvas.selected_point.first.round(ROUND_DIGITS)}"
+    #       when TAB_CALIBRATIONS
+    #         choose_calibration_point(@spectrum_canvas.canvas_point_to_spectrum(point).first)       
+    #       end
+    #         
+    #       @spectrum_canvas.update
+    #     end
+    #   end
+    #     
+    #   zoom_button_vertical_frame = FXVerticalFrame.new(bottom_horizontal_frame, :opts => LAYOUT_FIX_WIDTH|LAYOUT_FILL_Y, :width => 50)
+    #     
+    #   # zoom buttons
+    #   zoom_in_button = FXButton.new(zoom_button_vertical_frame, "+", :opts => FRAME_RAISED|LAYOUT_FILL)
+    #   zoom_in_button.connect(SEL_COMMAND) do
+    #       
+    #     visible_spectrum = @spectrum_canvas.visible_spectrum.to_a
+    #       
+    #     # recalculate zoom in values
+    #     if (visible_spectrum.size > 4)
+    #       quarter = (visible_spectrum.last.first - visible_spectrum.first.first) / 4
+    #       zoom_begin = visible_spectrum.first.first + quarter
+    #       zoom_end = visible_spectrum.last.first - quarter
+    #         
+    #       @spectrum_canvas.zoom_from = [zoom_begin, nil]
+    #       @spectrum_canvas.zoom_to = [zoom_end, nil]
+    #         
+    #       update_visible_spectrum
+    #     end
+    #   end
+    #     
+    #   zoom_reset_buttom = FXButton.new(zoom_button_vertical_frame, "100%", :opts => FRAME_RAISED|LAYOUT_FILL)
+    #   zoom_reset_buttom.connect(SEL_COMMAND) do
+    #     spectrum = @spectrum.to_a
+    #     @spectrum_canvas.zoom_from = [spectrum.first.first, nil]
+    #     @spectrum_canvas.zoom_to = [spectrum.last.first, nil]
+    #       
+    #     update_visible_spectrum
+    #   end
+    #     
+    #   zoom_out_button = FXButton.new(zoom_button_vertical_frame, "-", :opts => FRAME_RAISED|LAYOUT_FILL)
+    #   zoom_out_button.connect(SEL_COMMAND) do
+    #     visible_spectrum = @spectrum_canvas.visible_spectrum.to_a
+    #     spectrum = @spectrum.to_a
+    #       
+    #     # recalculate zoom out values
+    #     if (visible_spectrum.size > 4)
+    #       quarter = (visible_spectrum.last.first - visible_spectrum.first.first) / 4
+    #       zoom_begin = visible_spectrum.first.first - quarter
+    #       zoom_end = visible_spectrum.last.first + quarter
+    #         
+    #       # limit to the spectrum values
+    #       zoom_begin = spectrum.first.first if zoom_begin < spectrum.first.first
+    #       zoom_end = spectrum.last.first if zoom_end > spectrum.last.first
+    #         
+    #       @spectrum_canvas.zoom_from = [zoom_begin, nil]
+    #       @spectrum_canvas.zoom_to = [zoom_end, nil]
+    #         
+    #       update_visible_spectrum
+    #     end
+    #       
+    #   end
+    # end
 	
     def create
       super
 		
-      reset_to_default_values
+      ## FIXME remove
+      # reset_to_default_values
 		
       show(PLACEMENT_VISIBLE)
 		
@@ -666,37 +683,40 @@ module Hyperspectral
 		
     end
 	
-    def reset_to_default_values
-		
-      # reset calculated spectrum data
-      @average_spectrum = @spectrum = nil
-      @spectrum_canvas.reset_cache
-      @imzml = nil
-		
-      # reset image vars
-      @selected_x, @selected_y = 0, 0
-      @scale_x, @scale_y = 1, 1
-      @image = nil
-		
-      # reset spectrum vars
-      @spectrum_canvas.selected_point, @spectrum_canvas.selected_interval = nil, 0
-      @spectrum_canvas.selected_fixed_point, @spectrum_canvas.selected_fixed_interval = nil, 0
-		
-      # reset input fields
-      @interval_textfield.text = @spectrum_canvas.selected_interval.to_s
-      @mz_textfield.text = "0"
-      @interval_textfield.text = "0"
-      @tree_list_box.clearItems
-		
-      # calibration defaults
-      @calibration_points = Array.new
-      @table.removeRows(0, @table.numRows)
-    end
+    ## FIXME
+    # def reset_to_default_values
+    #     
+    #   # reset calculated spectrum data
+    #   @average_spectrum = @spectrum = nil
+    #   @spectrum_canvas.reset_cache
+    #   @imzml = nil
+    #     
+    #   # reset image vars
+    #   @selected_x, @selected_y = 0, 0
+    #   @scale_x, @scale_y = 1, 1
+    #   @image = nil
+    #     
+    #   # reset spectrum vars
+    #   @spectrum_canvas.selected_point, @spectrum_canvas.selected_interval = nil, 0
+    #   @spectrum_canvas.selected_fixed_point, @spectrum_canvas.selected_fixed_interval = nil, 0
+    #     
+    #   # reset input fields
+    #   @interval_textfield.text = @spectrum_canvas.selected_interval.to_s
+    #   @mz_textfield.text = "0"
+    #   @interval_textfield.text = "0"
+    #   @tree_list_box.clearItems
+    #     
+    #   # calibration defaults
+    #   @calibration_points = Array.new
+    #   @table.removeRows(0, @table.numRows)
+    # end
 	
     def read_file(filepath)
       pp "reading file #{filepath}"
+      pp "filpath klass #{filepath.class}"
 		
-      reset_to_default_values
+      ## FIXME remove
+      # reset_to_default_values
 		
       log("Parsing imzML file") do
         self.title = filepath.split("/").last
@@ -728,8 +748,9 @@ module Hyperspectral
         # delete unwanted values
         @spectrum_canvas.visible_spectrum.delete_if{ |key, value| key < @spectrum_canvas.zoom_from.first || key > @spectrum_canvas.zoom_to.first }
 			
+        ## FIXME remove
         # reset spectrum cache
-        @spectrum_canvas.reset_cache
+        # @spectrum_canvas.reset_cache
 			
         # reset zoom values
         @spectrum_canvas.zoom_from = @spectrum_canvas.zoom_to = nil
@@ -832,7 +853,9 @@ module Hyperspectral
       array = @spectrum.map { |key, value| [@calibration.recalculate(key), value] }
       @spectrum = array_to_h(array)
       @spectrum_canvas.visible_spectrum = @spectrum.dup
-      @spectrum_canvas.reset_cache
+      
+      ## FIXME remove
+      # @spectrum_canvas.reset_cache
 		
       update_visible_spectrum
     end

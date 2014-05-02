@@ -8,22 +8,18 @@ require "csv"
 require "pp"
 # require "byebug"
 require "fox16"
+require "fox16/colors"
 require "imzml"
 
-require "hyperspectral"
-require "hyperspectral/fox"
-require "hyperspectral/peak_detector"
-require "hyperspectral/smoothing/moving_average"
-require "hyperspectral/smoothing/savitzky_golay"
+# load all ruby files from all subdirectories
+Dir.glob("{hyperspectral, core_ext}/**/*.rb", &method(:require))
 
-require "hyperspectral/ui/spectrum_canvas"
-require "hyperspectral/ui/main_window"
-require "hyperspectral/ui/menu_bar"
+require "core_ext/array"
 
 # TODO debug
 if __FILE__ == $0
   Fox::FXApp.new do |app|
-    Hyperspectral::Reader.new(app)
+    Hyperspectral::MainController.new(app)
     app.create
     app.run
   end
