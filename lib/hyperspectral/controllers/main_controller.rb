@@ -52,8 +52,14 @@ module Hyperspectral
       )
       tab_book.connect(Fox::SEL_COMMAND, method(:tab_changed))
 
+      # ========================
+      # = SELECTION CONTROLLRE =
+      # ========================
       @selection_controller = SelectionFeatureController.new
       @selection_controller.load_view(tab_book)
+      @selection_controller.when_changed_mz_value do |mz_value|
+        @spectrum_controller.selected_points = [mz_value]
+      end
 
       @smoothing_controller = SmoothingFeatureController.new
       @smoothing_controller.load_view(tab_book)

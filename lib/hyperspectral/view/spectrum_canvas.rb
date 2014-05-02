@@ -48,6 +48,11 @@ module Hyperspectral
       self.visible_spectrum = spectrum.dup
     end
 
+    def selected_points=(points)
+      @selected_points = points
+      self.update
+    end
+
     # Resets spectrum point cache
     #
     # Returns nothing

@@ -7,6 +7,20 @@ module Hyperspectral
     # Array of spectrum points where each poin is subarray with just two items
     attr_accessor :points
 
+    # Array with selectd points, after change, display it on spectrum canvas
+    attr_accessor :selected_points
+
+    def points=(points)
+      @points = points
+      @spectrum_canvas.spectrum = points
+      @spectrum_canvas.update
+    end
+
+    def selected_points=(points)
+      @selected_points = points
+      @spectrum_canvas.selected_points = points
+    end
+
     # Load all views controller by this controller
     def load_view(superview)
 
@@ -42,12 +56,6 @@ module Hyperspectral
       # FIXME debug
       # @spectrum_canvas.selected_points = [1.2, 2.2, 3.4]
       needs_display
-    end
-
-    def points=(points)
-      @points = points
-      @spectrum_canvas.spectrum = points
-      @spectrum_canvas.update
     end
 
     # Redraws the views

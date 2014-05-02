@@ -2,6 +2,8 @@ module Hyperspectral
 
   class SelectionFeatureController
 
+    include Callbacks
+
     TITLE = "Selection"
 
     attr_accessor :selected_value
@@ -30,13 +32,11 @@ module Hyperspectral
           Fox::LAYOUT_FILL
       )
 
-     #  @mz_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-     #    if sender.text.size > 0
-     #      # damn what the hell does mean the first.last??
-     #      @spectrum_canvas.selected_point = [sender.text.to_f, @spectrum_canvas.visible_spectrum.to_a.first.last]
-     #      @spectrum_canvas.update
-     #    end
-     #  end
+      @mz_value_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+        if sender.text.size > 0
+          callback(:when_changed_mz_value, sender.text.to_f)
+        end
+      end
     #
     #   Fox::FXLabel.new(matrix, "interval value", nil,
     #     Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT |
