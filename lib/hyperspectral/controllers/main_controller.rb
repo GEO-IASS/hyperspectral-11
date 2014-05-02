@@ -14,7 +14,7 @@ module Hyperspectral
       show(Fox::PLACEMENT_VISIBLE)
 
       # FIXME debug
-      open_file(nil)
+      open_file("/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML")
     end
 
     def load_view(superview)
@@ -104,11 +104,18 @@ module Hyperspectral
     def open_file(filepath)
       p "I should open #{filepath}"
 
-      # self.title = filepath.split("/").last
-      # @metadata = ImzML::Parser.new(filepath).metadata
+      self.title = filepath.split("/").last
+      @metadata = ImzML::Parser.new(filepath).metadata
+
+      # load first spectrum by default
+      first_spectrum = @metadata.spectrums.values.first
+      mz = first_spectrum.mz_binary.data
+      intensity = first_spectrum.intensity_binary.data
+      points = mz.zip(intensity).to_h
 
       # FIXME debug
-      @spectrum_controller.points = Hash[1, 2, 2, 5, 3, 3, 4, 3, 5, 2, 6, 1, 7, 4, 8, 3, 9, 1, 10, 4, 11, 6, 12, 8, 13, 2]
+      # @spectrum_controller.points = Hash[1, 2, 2, 5, 3, 3, 4, 3, 5, 2, 6, 1, 7, 4, 8, 3, 9, 1, 10, 4, 11, 6, 12, 8, 13, 2]
+      @spectrum_controller.points = points
       p @spectrum_controller.points
 
       # @metadata.spectrums.each do |k, v|

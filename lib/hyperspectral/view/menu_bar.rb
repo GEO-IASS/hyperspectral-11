@@ -14,7 +14,7 @@ module Hyperspectral
       Fox::FXMenuTitle.new(self, "File", :popupMenu => file_menu)
 
       Fox::FXMenuCommand.new(file_menu, "Open...").connect(Fox::SEL_COMMAND) do
-        dialog = FXFileDialog.new(self, "Open imzML file")
+        dialog = Fox::FXFileDialog.new(self, "Open imzML file")
         dialog.directory = "#{DEFAULT_DIR}"
         dialog.patternList = ["imzML files (*.imzML)"]
 
@@ -27,7 +27,7 @@ module Hyperspectral
       Fox::FXMenuSeparator.new(file_menu)
 
       Fox::FXMenuCommand.new(file_menu, "Save image...").connect(Fox::SEL_COMMAND) do
-        saveDialog = FXFileDialog.new(self, "Save as PNG")
+        saveDialog = Fox::FXFileDialog.new(self, "Save as PNG")
         saveDialog.patternList = ["PNG files (*.png)"]
         if @image
           if saveDialog.execute != 0
@@ -37,7 +37,7 @@ module Hyperspectral
       end
 
       Fox::FXMenuCommand.new(file_menu, "Save spectrum ...").connect(Fox::SEL_COMMAND) do
-        saveDialog = FXFileDialog.new(self, "Save as CSV")
+        saveDialog = Fox::FXFileDialog.new(self, "Save as CSV")
         saveDialog.patternList = ["CSV files (*.csv)"]
         if @spectrum
           if saveDialog.execute != 0
