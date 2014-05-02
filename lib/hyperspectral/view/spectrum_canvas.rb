@@ -513,10 +513,11 @@ module Hyperspectral
       x
     end
 
+
     def mouse_pressed(sender, selector, event)
       case event.click_button
       when LEFT_MOUSE
-        @zoom_from = check_canvas_x(event.click_x)
+        @zoom_from = @zoom_to = check_canvas_x(event.click_x)
       when RIGHT_MOUSE
         spectrum_x_value = canvas_point_to_spectrum([check_canvas_x(event.last_x), 0])[0]
         case @mode
@@ -526,6 +527,7 @@ module Hyperspectral
         end
       end
 
+      @show_cross = false
       @pressed = event.click_button
       self.update
     end
@@ -546,6 +548,7 @@ module Hyperspectral
         end
       end
 
+      @show_cross = true
       @pressed = NO_MOUSE
       self.update
     end

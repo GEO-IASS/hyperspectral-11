@@ -66,6 +66,9 @@ module Hyperspectral
       @selection_controller.when_spectrum_listbox_chaned do |name|
         open_spectrum(name)
       end
+      @selection_controller.when_average_spectrum_pressed do
+        calculate_average_spectrum
+      end
 
       # ========================
       # = SMOOTHING CONTROLLER =
@@ -99,7 +102,7 @@ module Hyperspectral
     attr_accessor :spectrum_controller
 
     # models
-    attr_accessor :metadata
+    attr_accessor :metadata, :average_spectrum
 
     # views
     attr_accessor :menu_bar, :progress_dialog
@@ -107,7 +110,46 @@ module Hyperspectral
     # help variables
     attr_accessor :mutex
 
+    def calculate_average_spectrum
+      spectrums_count = @metadata.spectrums.size
+
+      p "calculating average for #{spectrums_count} spectrums"
+      @progress_dialog.run(spectrums_count) do |dialog|
+        dictionary = Hash.new
+        sum = spectrums_count
+
+        # add all values
+        @metadata.spectrums.each do |name, spectrum|
+
+          zipped_array = spectrum.mz_binary.data.zip(spectrum.intensity_binary.data)
+
+          # create data array
+          zipped_array.each do |key_value|
+            key = key_value.first
+            value = key_value.last
+
+            dictionary[key] ||= 0
+            dictionary[key] += value
+          end
+
+          dialog.done
+        end
+
+        # divide and make average
+        dictionary.each do |key, value|
+          value /= sum
+        end
+
+        # save average spectrum
+        @average_spectrum = dictionary
+        @spectrum_controller.points = @average_spectrum
+      end
+    end
+
     def open_file(filepath)
+
+      # reset values
+      @average_spectrum = nil
 
       self.title = filepath.split("/").last
       @metadata = ImzML::Parser.new(filepath).metadata

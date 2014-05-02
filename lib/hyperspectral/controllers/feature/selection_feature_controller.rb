@@ -93,22 +93,27 @@ module Hyperspectral
       @spectrums_treelistbox.connect(Fox::SEL_COMMAND) do |sender, sel, event|
         callback(:when_spectrum_listbox_chaned, event.to_s)
       end
-    #
-    #   Fox::FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
-    #   Fox::FXButton.new(matrix, "Show average spectrum",
-    #     :opts => Fox::LAYOUT_FILL | Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
-    #     # load average
-    #     if @average_spectrum.nil?
-    #       run_on_background do
-    #         create_average_spectrum
-    #       end
-    #     end
-    #     @spectrum = @average_spectrum.dup
-    #     @spectrum_canvas.visible_spectrum = @average_spectrum.dup
-    #     @selected_y = @selected_x = 0
-    #     @image_canvas.update
-    #     update_visible_spectrum
-    #   end
+
+      # =========================
+      # = Show average spectrum =
+      # =========================
+      Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
+      Fox::FXButton.new(matrix, "Show average spectrum",
+        :opts => Fox::LAYOUT_FILL |
+          Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
+          callback(:when_average_spectrum_pressed)
+        # # load average
+        # if @average_spectrum.nil?
+        #   run_on_background do
+        #     create_average_spectrum
+        #   end
+        # end
+        # @spectrum = @average_spectrum.dup
+        # @spectrum_canvas.visible_spectrum = @average_spectrum.dup
+        # @selected_y = @selected_x = 0
+        # @image_canvas.update
+        # update_visible_spectrum
+      end
     #
     #   Fox::FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
     #   Fox::FXButton.new(matrix, "Draw image", :opts => Fox::LAYOUT_FILL|Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
