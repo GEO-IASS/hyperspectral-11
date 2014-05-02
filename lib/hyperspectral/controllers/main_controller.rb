@@ -53,7 +53,7 @@ module Hyperspectral
       tab_book.connect(Fox::SEL_COMMAND, method(:tab_changed))
 
       # ========================
-      # = SELECTION CONTROLLRE =
+      # = SELECTION CONTROLLER =
       # ========================
       @selection_controller = SelectionFeatureController.new
       @selection_controller.load_view(tab_book)
@@ -63,7 +63,13 @@ module Hyperspectral
       @selection_controller.when_changed_interval_value do |interval|
         @spectrum_controller.selected_interval = interval
       end
+      @selection_controller.when_spectrum_listbox_chaned do |name|
+        open_spectrum(name)
+      end
 
+      # ========================
+      # = SMOOTHING CONTROLLER =
+      # ========================
       @smoothing_controller = SmoothingFeatureController.new
       @smoothing_controller.load_view(tab_book)
 
@@ -102,25 +108,32 @@ module Hyperspectral
     attr_accessor :mutex
 
     def open_file(filepath)
-      p "I should open #{filepath}"
 
       self.title = filepath.split("/").last
       @metadata = ImzML::Parser.new(filepath).metadata
 
-      # load first spectrum by default
-      first_spectrum = @metadata.spectrums.values.first
-      mz = first_spectrum.mz_binary.data
-      intensity = first_spectrum.intensity_binary.data
+      # open spectrum
+      open_spectrum
+
+      # set spectrum names
+      @selection_controller.spectrum_names = @metadata.spectrums.keys
+    end
+
+    def open_spectrum(name = nil)
+      spectrum = nil
+      if name
+        spectrum = @metadata.spectrums[name.to_sym]
+      else
+        # load first spectrum by default
+        spectrum = @metadata.spectrums.values.first
+      end
+
+      mz = spectrum.mz_binary.data
+      intensity = spectrum.intensity_binary.data
       points = mz.zip(intensity).to_h
 
-      # FIXME debug
-      # @spectrum_controller.points = Hash[1, 2, 2, 5, 3, 3, 4, 3, 5, 2, 6, 1, 7, 4, 8, 3, 9, 1, 10, 4, 11, 6, 12, 8, 13, 2]
+      # show points on spectrum
       @spectrum_controller.points = points
-      p @spectrum_controller.points
-
-      # @metadata.spectrums.each do |k, v|
-      #   @tree_list_box.appendItem(nil, k.to_s)
-      # end
     end
 
     def tab_changed(sender, selector, event)

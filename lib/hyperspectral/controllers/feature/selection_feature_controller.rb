@@ -6,11 +6,31 @@ module Hyperspectral
 
     TITLE = "Selection"
 
+    # Currently selected mz value
     attr_accessor :selected_value
+
+    # Reference for spectrum names to show in tree list box
+    attr_accessor :spectrum_names
 
     def selected_value=(value)
       @selected_value = value
       @mz_textfield.text = value.to_s
+    end
+
+    def spectrum_names=(names)
+      @spectrum_names = names
+
+      return unless @spectrums_treelistbox
+
+      # remove previous items
+      @spectrums_treelistbox.clearItems
+
+      p "tree list #{@spectrums_treelistbox.respond_to?(:appendItem)}"
+
+      # add new items
+      names.each do |name|
+        @spectrums_treelistbox.appendItem(nil, name.to_s)
+      end
     end
 
     def load_view(superview)
@@ -61,22 +81,18 @@ module Hyperspectral
       # =====================
       # = Spectrum selector =
       # =====================
-    #
-    #   Fox::FXLabel.new(matrix, "selected spectrum", nil,
-    #     Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT |
-    #     Fox::LAYOUT_FILL_ROW
-    #   )
-    #   @tree_list_box = Fox::FXTreeListBox.new(matrix, nil,
-    #     :opts => Fox::FRAME_SUNKEN | Fox::FRAME_THICK | Fox::LAYOUT_SIDE_TOP |
-    #     Fox::LAYOUT_FILL
-    #   )
-    #   @tree_list_box.numVisible = 5
-    #   @tree_list_box.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-    #
-    #     # open specfic spectrum
-    #     spectrum = @metadata.spectrums[event.to_s.to_sym]
-    #     open_spectrum(spectrum)
-    #   end
+      Fox::FXLabel.new(matrix, "selected spectrum", nil,
+        Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT |
+        Fox::LAYOUT_FILL_ROW
+      )
+      @spectrums_treelistbox = Fox::FXTreeListBox.new(matrix, nil,
+        :opts => Fox::FRAME_SUNKEN | Fox::FRAME_THICK | Fox::LAYOUT_SIDE_TOP |
+        Fox::LAYOUT_FILL
+      )
+      @spectrums_treelistbox.numVisible = 5
+      @spectrums_treelistbox.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+        callback(:when_spectrum_listbox_chaned, event.to_s)
+      end
     #
     #   Fox::FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
     #   Fox::FXButton.new(matrix, "Show average spectrum",
