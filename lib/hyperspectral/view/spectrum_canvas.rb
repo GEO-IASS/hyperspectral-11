@@ -2,6 +2,11 @@ module Hyperspectral
 
   class SpectrumCanvas < Fox::FXCanvas
 
+    include Callbacks
+
+    # Spectrum mode, can be one of the symbols [:default, :single_selection, :multi_selection]
+    attr_accessor :mode
+
     # The currently displayed full spectrum
     attr_accessor :spectrum
 
@@ -24,6 +29,7 @@ module Hyperspectral
       @smoothing_window_size = 5
       @pressed = NO_MOUSE
       @zoom_from = @zoom_from = nil
+      @mode = :single_selection
 
       # bind events methods
       connect(Fox::SEL_PAINT, method(:draw))
@@ -78,10 +84,6 @@ module Hyperspectral
       zoom_begin = visible_spectrum.first.first - quarter
       zoom_end = visible_spectrum.last.first + quarter
 
-      # FIXME debug
-      p "zoom out #{zoom_begin} #{zoom_end} quarter #{quarter}"
-
-
       # limit to the spectrum values
       zoom_begin = spectrum.first.first if zoom_begin < spectrum.first.first
       zoom_end = spectrum.last.first if zoom_end > spectrum.last.first
@@ -94,9 +96,6 @@ module Hyperspectral
       spectrum = @spectrum.to_a
       zoom_from = [spectrum.first[0], 0]
       zoom_to = [spectrum.last[0], 0]
-
-      # FIXME debug
-      p "zoom spectrum #{@spectrum.to_a}"
 
       zoom(zoom_from, zoom_to)
     end
@@ -328,11 +327,18 @@ module Hyperspectral
 
           # draw rectangle under the position text
           dc.foreground = dc.background = Fox::FXColor::White
-          dc.fillRectangle(mouse_point[0], mouse_point[1] - text_height, text_width + 2 * LABEL_X_PADDING, text_height + LABEL_Y_PADDING)
+          dc.fillRectangle(mouse_point[0],
+            mouse_point[1] - text_height,
+            text_width + 2 * LABEL_X_PADDING,
+            text_height + LABEL_Y_PADDING
+          )
 
           # draw the actual value
           dc.foreground = Fox::FXColor::LightSlateGray
-          dc.drawText(mouse_point[0] + LABEL_X_PADDING, mouse_point[1] - LABEL_Y_PADDING, position_text)
+          dc.drawText(mouse_point[0] + LABEL_X_PADDING,
+            mouse_point[1] - LABEL_Y_PADDING,
+            position_text
+          )
 
           # draw lines
           dc.lineStyle = Fox::LINE_ONOFF_DASH
@@ -347,9 +353,6 @@ module Hyperspectral
     # from - spectrum point from which to zoom in
     # to - spectrum point from which to zoom to
     def zoom(from, to)
-      # FIXME debug
-      p "zoom #{from} #{to}"
-
       spectrum_copy = @spectrum.dup
       self.visible_spectrum = spectrum_copy.keep_if do |k, v|
         k >= from[0] && k <= to[0]
@@ -438,10 +441,10 @@ module Hyperspectral
       return unless selected_point
       point = spectrum_point_to_canvas(selected_point)
 
-      context.lineStyle = LINE_SOLID
+      context.lineStyle = Fox::LINE_SOLID
       context.foreground = color
-      context.stipple = STIPPLE_NONE
-      context.fillStyle = FILL_SOLID
+      context.stipple = Fox::STIPPLE_NONE
+      context.fillStyle = Fox::FILL_SOLID
       context.drawLine(point[0],
         AXIS_PADDING,
         point[0],
@@ -491,26 +494,36 @@ module Hyperspectral
       when LEFT_MOUSE
         @zoom_from = check_canvas_x(event.click_x)
       when RIGHT_MOUSE
-        pp "right pressed"
+        spectrum_x_value = canvas_point_to_spectrum([check_canvas_x(event.last_x), 0])[0]
+        case @mode
+        when :single_selection
+          @selected_points = [spectrum_x_value]
+        when :multi_selection
+        end
       end
 
       @pressed = event.click_button
+      self.update
     end
 
     def mouse_released(sender, selector, event)
       case event.click_button
       when LEFT_MOUSE
-
         tmp = [@zoom_from, @zoom_to]
         spectrum_zoom_from = canvas_point_to_spectrum([tmp.min, 0])
         spectrum_zoom_to = canvas_point_to_spectrum([tmp.max, 0])
         zoom(spectrum_zoom_from, spectrum_zoom_to)
         @zoom_from = @zoom_from = nil
       when RIGHT_MOUSE
-        pp "right released"
+        case @mode
+        when :single_selection
+          callback(:when_select_point, @selected_points)
+        when :multi_selection
+        end
       end
 
       @pressed = NO_MOUSE
+      self.update
     end
 
     def mouse_moved(sender, selector, event)
@@ -519,7 +532,12 @@ module Hyperspectral
       when LEFT_MOUSE
         @zoom_to = check_canvas_x(event.last_x)
       when RIGHT_MOUSE
-        pp "moved with right"
+        spectrum_x_value = canvas_point_to_spectrum([check_canvas_x(event.last_x), 0])[0]
+        case @mode
+        when :single_selection
+          @selected_points = [spectrum_x_value]
+        when :multi_selection
+        end
       end
 
       self.update

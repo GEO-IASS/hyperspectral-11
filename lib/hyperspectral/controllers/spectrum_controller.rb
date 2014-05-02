@@ -2,6 +2,8 @@ module Hyperspectral
 
   class SpectrumController
 
+    include Callbacks
+
     # Array of spectrum points where each poin is subarray with just two items
     attr_accessor :points
 
@@ -15,6 +17,10 @@ module Hyperspectral
 
       @spectrum_canvas = Hyperspectral::SpectrumCanvas.new(horizontal_frame)
       @spectrum_canvas.show_cross = true
+
+      @spectrum_canvas.when_select_point do |selected_points|
+        callback(:when_select_point, selected_points)
+      end
 
       buttons_frame = Fox::FXVerticalFrame.new(horizontal_frame,
         :opts => Fox::LAYOUT_FIX_WIDTH | Fox::LAYOUT_FILL_Y,

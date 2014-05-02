@@ -1,8 +1,8 @@
 module Hyperspectral
 
-  include Callbacks
-
   class ProgressDialog < Fox::FXProgressDialog
+
+    include Callbacks
 
     def initialize(superview, title = "Please wait", label = "Working ...")
       super(superview, title, label)

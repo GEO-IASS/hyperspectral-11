@@ -2,9 +2,18 @@ module Hyperspectral
 
   class SelectionFeatureController
 
+    TITLE = "Selection"
+
+    attr_accessor :selected_value
+
+    def selected_value=(value)
+      @selected_value = value
+      @mz_value_textfield.text = value.to_s
+    end
+
     def load_view(superview)
 
-      item = Fox::FXTabItem.new(superview, "Selection")
+      item = Fox::FXTabItem.new(superview, TITLE)
       matrix = Fox::FXMatrix.new(superview,
         :opts => Fox::FRAME_THICK | Fox::FRAME_RAISED | Fox::LAYOUT_FILL_X |
           Fox::MATRIX_BY_COLUMNS
@@ -15,11 +24,12 @@ module Hyperspectral
       Fox::FXLabel.new(matrix, "m/z value", nil, Fox::LAYOUT_CENTER_Y |
         Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT | Fox::LAYOUT_FILL_ROW
       )
-      @mz_textfield = Fox::FXTextField.new(matrix, 10,
+      @mz_value_textfield = Fox::FXTextField.new(matrix, 30,
         :opts => Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X |
           Fox::FRAME_SUNKEN | Fox::FRAME_THICK | Fox::TEXTFIELD_REAL |
           Fox::LAYOUT_FILL
       )
+
      #  @mz_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
      #    if sender.text.size > 0
      #      # damn what the hell does mean the first.last??
@@ -95,6 +105,10 @@ module Hyperspectral
     #     end
     #   end
     end
+
+    private
+
+    attr_accessor :mz_value_textfield
 
   end
 

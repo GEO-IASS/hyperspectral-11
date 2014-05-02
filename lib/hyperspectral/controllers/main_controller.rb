@@ -47,30 +47,34 @@ module Hyperspectral
       # ========
       # = TABS =
       # ========
-      tabs = Fox::FXTabBook.new(top_frame,
+      tab_book = Fox::FXTabBook.new(top_frame,
         :opts => Fox::LAYOUT_FILL_X | Fox::LAYOUT_RIGHT | Fox::LAYOUT_FILL_Y
       )
+      tab_book.connect(Fox::SEL_COMMAND, method(:tab_changed))
 
       @selection_controller = SelectionFeatureController.new
-      @selection_controller.load_view(tabs)
+      @selection_controller.load_view(tab_book)
 
       @smoothing_controller = SmoothingFeatureController.new
-      @smoothing_controller.load_view(tabs)
+      @smoothing_controller.load_view(tab_book)
 
       @baseline_controller = BaselineFeatureController.new
-      @baseline_controller.load_view(tabs)
+      @baseline_controller.load_view(tab_book)
 
       @calibration_controller = CalibrationFeatureController.new
-      @calibration_controller.load_view(tabs)
+      @calibration_controller.load_view(tab_book)
 
       @peak_controller = PeakFeatureController.new
-      @peak_controller.load_view(tabs)
+      @peak_controller.load_view(tab_book)
 
       # =======================
       # = SPECTRUM CONTROLLER =
       # =======================
       @spectrum_controller = SpectrumController.new
       @spectrum_controller.load_view(vertical_frame)
+      @spectrum_controller.when_select_point do |selected_points|
+        @selection_controller.selected_value = selected_points.first
+      end
 
     end
 
@@ -107,6 +111,27 @@ module Hyperspectral
       @spectrum_controller.needs_display
       @image_controller.need_display
     end
+
+    def tab_changed(sender, selector, event)
+
+      # find selected tab
+      tab_index = event
+      tab_title = sender.children[tab_index * 2].to_s
+      case tab_title
+      when SelectionFeatureController::TITLE
+        p tab_title
+      when SmoothingFeatureController::TITLE
+        p tab_title
+      when BaselineFeatureController::TITLE
+        p tab_title
+      when CalibrationFeatureController::TITLE
+        p tab_title
+      when PeakFeatureController::TITLE
+        p tab_title
+      end
+
+    end
+
 
   end
 
