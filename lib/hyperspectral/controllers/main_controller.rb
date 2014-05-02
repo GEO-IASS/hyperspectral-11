@@ -44,6 +44,28 @@ module Hyperspectral
       @image_controller = ImageController.new
       @image_controller.load_view(top_frame)
 
+      # ========
+      # = TABS =
+      # ========
+      tabs = Fox::FXTabBook.new(top_frame,
+        :opts => Fox::LAYOUT_FILL_X | Fox::LAYOUT_RIGHT | Fox::LAYOUT_FILL_Y
+      )
+
+      @selection_controller = SelectionFeatureController.new
+      @selection_controller.load_view(tabs)
+
+      @smoothing_controller = SmoothingFeatureController.new
+      @smoothing_controller.load_view(tabs)
+
+      @baseline_controller = BaselineFeatureController.new
+      @baseline_controller.load_view(tabs)
+
+      @calibration_controller = CalibrationFeatureController.new
+      @calibration_controller.load_view(tabs)
+
+      @peak_controller = PeakFeatureController.new
+      @peak_controller.load_view(tabs)
+
       # =======================
       # = SPECTRUM CONTROLLER =
       # =======================
