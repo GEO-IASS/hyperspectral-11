@@ -38,9 +38,9 @@ module Hyperspectral
       vertical_frame = Fox::FXVerticalFrame.new(superview, :opts => Fox::LAYOUT_FILL)
       top_frame = Fox::FXHorizontalFrame.new(vertical_frame, :opts => Fox::LAYOUT_FILL_X)
 
-      # ====================
-      # = IMAGE CONTROLLER =
-      # ====================
+      # =========
+      # = IMAGE =
+      # =========
       @image_controller = ImageController.new
       @image_controller.load_view(top_frame)
       @image_controller.when_spectrum_selected do |spectrum_index|
@@ -56,9 +56,9 @@ module Hyperspectral
       )
       tab_book.connect(Fox::SEL_COMMAND, method(:tab_changed))
 
-      # ========================
-      # = SELECTION CONTROLLER =
-      # ========================
+      # =============
+      # = SELECTION =
+      # =============
       @selection_controller = SelectionFeatureController.new
       @selection_controller.load_view(tab_book)
       @selection_controller.when_changed_mz_value do |mz_value|
@@ -77,24 +77,27 @@ module Hyperspectral
         show_image
       end
 
-      # ========================
-      # = SMOOTHING CONTROLLER =
-      # ========================
+      # ===============
+      # = CALIBRATION =
+      # ===============
+      @calibration_controller = CalibrationFeatureController.new
+      @calibration_controller.load_view(tab_book)
+
+      # =============
+      # = SMOOTHING =
+      # =============
       @smoothing_controller = SmoothingFeatureController.new
       @smoothing_controller.load_view(tab_book)
 
       @baseline_controller = BaselineFeatureController.new
       @baseline_controller.load_view(tab_book)
 
-      @calibration_controller = CalibrationFeatureController.new
-      @calibration_controller.load_view(tab_book)
-
       @peak_controller = PeakFeatureController.new
       @peak_controller.load_view(tab_book)
 
-      # =======================
-      # = SPECTRUM CONTROLLER =
-      # =======================
+      # ============
+      # = SPECTRUM =
+      # ============
       @spectrum_controller = SpectrumController.new
       @spectrum_controller.load_view(vertical_frame)
       @spectrum_controller.when_select_point do |selected_points|
@@ -222,7 +225,7 @@ module Hyperspectral
       when BaselineFeatureController::TITLE
         p tab_title
       when CalibrationFeatureController::TITLE
-        p tab_title
+        @spectrum_controller
       when PeakFeatureController::TITLE
         p tab_title
       end
