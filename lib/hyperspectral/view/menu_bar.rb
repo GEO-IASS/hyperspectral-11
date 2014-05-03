@@ -52,6 +52,18 @@ module Hyperspectral
         callback(:when_exit)
       end
 
+      ## FIXME debug
+      # =========
+      # = DEBUG =
+      # =========
+
+      debug_menu = Fox::FXMenuPane.new(self)
+      Fox::FXMenuTitle.new(self, "DEBUG", :popupMenu => debug_menu)
+
+      Fox::FXMenuCommand.new(debug_menu, "S042_Continuous").connect(Fox::SEL_COMMAND) do
+        callback(:when_file_opens, "/Users/beny/Dropbox/School/dp/imzML/s042_continuous/S042_Continuous.imzML")
+      end
+
     end
 
   end

@@ -1,10 +1,10 @@
 class Array
-  
+
   def savgol(window_size, order, deriv=0, check_args=false)
-  
+
     # check arguments
     if !window_size.is_a?(Integer) || window_size.abs != window_size || window_size % 2 != 1 || window_size < 1
-      raise ArgumentError, "window_size size must be a positive odd integer" 
+      raise ArgumentError, "window_size size must be a positive odd integer"
     end
     if !order.is_a?(Integer) || order < 0
       raise ArgumentError, "order must be an integer >= 0"
@@ -47,5 +47,16 @@ class Array
     pinv = Matrix[*pinv_matrix.to_a]
     pinv.row(deriv).to_a
   end
-  
+
+  def x
+    self[0]
+  end
+
+  def y
+    self[1]
+  end
+
+  alias_method :width, :x
+  alias_method :height, :y
+
 end

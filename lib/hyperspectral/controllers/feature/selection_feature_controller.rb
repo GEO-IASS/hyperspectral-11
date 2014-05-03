@@ -9,8 +9,15 @@ module Hyperspectral
     # Currently selected mz value
     attr_accessor :selected_value
 
+    # Selected mz interval number (readonly)
+    attr_reader :selected_interval
+
     # Reference for spectrum names to show in tree list box
     attr_accessor :spectrum_names
+
+    def selected_interval
+      @interval_textfield.text.to_f
+    end
 
     def selected_value=(value)
       @selected_value = value
@@ -24,8 +31,6 @@ module Hyperspectral
 
       # remove previous items
       @spectrums_treelistbox.clearItems
-
-      p "tree list #{@spectrums_treelistbox.respond_to?(:appendItem)}"
 
       # add new items
       names.each do |name|
@@ -72,8 +77,9 @@ module Hyperspectral
           Fox::FRAME_SUNKEN | Fox::FRAME_THICK | Fox::TEXTFIELD_REAL |
           Fox::LAYOUT_FILL
       )
+      @interval_textfield.text = 0.to_s
       @interval_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-        if sender.text.size > 0
+        if sender.text.size >= 0
           callback(:when_changed_interval_value, sender.text.to_f)
         end
       end
@@ -102,27 +108,20 @@ module Hyperspectral
         :opts => Fox::LAYOUT_FILL |
           Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
           callback(:when_average_spectrum_pressed)
-        # # load average
-        # if @average_spectrum.nil?
-        #   run_on_background do
-        #     create_average_spectrum
-        #   end
-        # end
-        # @spectrum = @average_spectrum.dup
-        # @spectrum_canvas.visible_spectrum = @average_spectrum.dup
-        # @selected_y = @selected_x = 0
-        # @image_canvas.update
-        # update_visible_spectrum
+      end
+
+      # =====================
+      # = Draw image button =
+      # =====================
+      Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
+      draw_image_button = Fox::FXButton.new(matrix, "Draw image",
+        :opts => Fox::LAYOUT_FILL | Fox::BUTTON_NORMAL
+      )
+      draw_image_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+        callback(:when_draw_image_pressed)
       end
     #
-    #   Fox::FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
-    #   Fox::FXButton.new(matrix, "Draw image", :opts => Fox::LAYOUT_FILL|Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
-    #     run_on_background do
-    #       create_image
-    #     end
-    #   end
-    #
-    #   Fox::FXSeparator.new(matrix, :opts => SEPARATOR_NONE)
+    #   Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
     #   Fox::FXButton.new(matrix, "Find peaks", :opts => Fox::LAYOUT_FILL|Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
     #     run_on_background do
     #

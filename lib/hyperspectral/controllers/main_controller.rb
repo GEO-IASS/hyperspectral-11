@@ -43,6 +43,10 @@ module Hyperspectral
       # ====================
       @image_controller = ImageController.new
       @image_controller.load_view(top_frame)
+      @image_controller.when_spectrum_selected do |spectrum_index|
+        spectrum_name = @metadata.spectrums.keys[spectrum_index]
+        open_spectrum(spectrum_name)
+      end
 
       # ========
       # = TABS =
@@ -68,6 +72,9 @@ module Hyperspectral
       end
       @selection_controller.when_average_spectrum_pressed do
         calculate_average_spectrum
+      end
+      @selection_controller.when_draw_image_pressed do
+        show_image
       end
 
       # ========================
@@ -136,9 +143,7 @@ module Hyperspectral
         end
 
         # divide and make average
-        dictionary.each do |key, value|
-          value /= sum
-        end
+        dictionary.each { |key, value| value /= sum }
 
         # save average spectrum
         @average_spectrum = dictionary
@@ -159,6 +164,9 @@ module Hyperspectral
 
       # set spectrum names
       @selection_controller.spectrum_names = @metadata.spectrums.keys
+
+      # Clear the previous image
+      @image_controller.clear_image
     end
 
     def open_spectrum(name = nil)
@@ -176,6 +184,29 @@ module Hyperspectral
 
       # show points on spectrum
       @spectrum_controller.points = points
+
+      # Show the chosen spectrum in image
+      @image_controller.show_point(spectrum.position)
+    end
+
+    def show_image
+      mz_value = @selection_controller.selected_value
+      interval = @selection_controller.selected_interval
+
+      return if interval.nil? && mz_value.nil?
+
+      spectrums = @metadata.spectrums
+      image_size = @metadata.scan_settings.values.first.image.max_pixel_count
+      @progress_dialog.run(spectrums.size) do |dialog|
+        values = Array.new
+        # get the specific intensity value
+        spectrums.each do |name, spectrum|
+          values << spectrum.intensity(mz_value, interval)
+          dialog.done
+        end
+
+        @image_controller.create_image(values, image_size.x, image_size.y)
+      end
     end
 
     def tab_changed(sender, selector, event)

@@ -213,7 +213,7 @@ module Hyperspectral
             # mz = @calibration.recalculate(mz) if @calibration
             point = spectrum_point_to_canvas([mz, intensity])
             # do not draw the same point twice
-            points << Fox::FXPoint.new(point[0].to_i, point[1].to_i)
+            points << Fox::FXPoint.new(point.x.to_i, point.y.to_i)
             # previous_point = point
           end
 
