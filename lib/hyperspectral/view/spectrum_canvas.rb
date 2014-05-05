@@ -258,10 +258,8 @@ module Hyperspectral
         # =====================
         # = Draw preview line =
         # =====================
-        dc.lineStyle = Fox::LINE_ONOFF_DASH
         dc.foreground = Fox::FXColor::Blue
         dc.drawLines(preview_points)
-        dc.lineStyle = Fox::LINE_SOLID
 
         # ====================
         # = draw found peaks =

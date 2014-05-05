@@ -94,6 +94,9 @@ module Hyperspectral
       # =============
       @smoothing_controller = SmoothingFeatureController.new
       @smoothing_controller.load_view(tab_book)
+      @smoothing_controller.when_smoothing_applied do |preview_points|
+        @spectrum_controller.preview_points = preview_points
+      end
 
       @baseline_controller = BaselineFeatureController.new
       @baseline_controller.load_view(tab_book)
@@ -235,7 +238,8 @@ module Hyperspectral
         end
         @spectrum_controller.selected_interval = @selection_controller.selected_interval
       when SmoothingFeatureController::TITLE
-        p tab_title
+        @smoothing_controller.points = @spectrum_controller.points
+        @spectrum_controller.preview_points = @smoothing_controller.preview_points
       when BaselineFeatureController::TITLE
         p tab_title
       when CalibrationFeatureController::TITLE
