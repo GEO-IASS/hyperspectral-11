@@ -82,6 +82,12 @@ module Hyperspectral
       # ===============
       @calibration_controller = CalibrationFeatureController.new
       @calibration_controller.load_view(tab_book)
+      @calibration_controller.when_selection_changed do
+        @spectrum_controller.selected_points = @calibration_controller.selected_points
+      end
+      @calibration_controller.when_calibration_preview do |preview_points|
+        @spectrum_controller.preview_points = preview_points
+      end
 
       # =============
       # = SMOOTHING =
@@ -214,18 +220,29 @@ module Hyperspectral
 
     def tab_changed(sender, selector, event)
 
+      # Reset values
+      @spectrum_controller.selected_points = nil
+      @spectrum_controller.preview_points = nil
+
       # find selected tab
       tab_index = event
       tab_title = sender.children[tab_index * 2].to_s
       case tab_title
       when SelectionFeatureController::TITLE
-        p tab_title
+        @spectrum_controller.mode = :single_selection
+        if @selection_controller.selected_value
+          @spectrum_controller.selected_points = [@selection_controller.selected_value]
+        end
+        @spectrum_controller.selected_interval = @selection_controller.selected_interval
       when SmoothingFeatureController::TITLE
         p tab_title
       when BaselineFeatureController::TITLE
         p tab_title
       when CalibrationFeatureController::TITLE
-        @spectrum_controller
+        @spectrum_controller.mode = :multi_selection
+        @spectrum_controller.selected_points = @calibration_controller.selected_points
+        @calibration_controller.points = @spectrum_controller.points
+        @spectrum_controller.preview_points = @calibration_controller.preview_points
       when PeakFeatureController::TITLE
         p tab_title
       end

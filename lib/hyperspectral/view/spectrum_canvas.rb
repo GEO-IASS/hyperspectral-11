@@ -7,6 +7,9 @@ module Hyperspectral
     # The currently displayed full spectrum
     attr_accessor :spectrum
 
+    # Array used for preview one preprocessing step with current spectrum
+    attr_accessor :preview_points
+
     # Array of selected point (in spectrum coords) which should be drawn
     attr_accessor :selected_points
 
@@ -183,7 +186,6 @@ module Hyperspectral
 
         return unless @spectrum && @spectrum_min_x && @spectrum_min_x
 
-        # FIXME
         preview_points = Array.new
 
         # ===============================================
@@ -199,23 +201,18 @@ module Hyperspectral
           @spectrum.each do |mz, intensity|
 
             # FIXME calibration
-            # mz = @calibration.recalculate(mz) if @calibration
             point = spectrum_point_to_canvas([mz, intensity])
-            # do not draw the same point twice
             points << Fox::FXPoint.new(point.x.to_i, point.y.to_i)
-            # previous_point = point
           end
 
-          ## FIXME
-          # # preview for smoothing
-          # if !@smoothing.nil?
-          #   preview_values = @spectrum.values
-          #   keys = @spectrum.keys
-          #   @smoothing.apply(preview_values, @smoothing_window_size).each_with_index do |intensity, index|
-          #     point = spectrum_point_to_canvas([keys[index], intensity])
-          #     preview_points << Fox::FXPoint.new(point.x.to_i, point.y.to_i)
-          #   end
-          # end
+          # FIXME
+          # preview points
+          @preview_points.each do |mz, intensity|
+
+            # FIXME calibration
+            point = spectrum_point_to_canvas([mz, intensity])
+            preview_points << Fox::FXPoint.new(point.x.to_i, point.y.to_i)
+          end if @preview_points
 
           @cached_spectrum = points
         end
@@ -258,9 +255,13 @@ module Hyperspectral
         dc.foreground = Fox::FXColor::Red
         dc.drawLines(points)
 
-        ## FIXME
-        # dc.foreground = Fox::FXColor::Blue
-        # dc.drawLines(preview_points)
+        # =====================
+        # = Draw preview line =
+        # =====================
+        dc.lineStyle = Fox::LINE_ONOFF_DASH
+        dc.foreground = Fox::FXColor::Blue
+        dc.drawLines(preview_points)
+        dc.lineStyle = Fox::LINE_SOLID
 
         # ====================
         # = draw found peaks =

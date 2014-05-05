@@ -15,6 +15,12 @@ module Hyperspectral
     # Reference for spectrum names to show in tree list box
     attr_accessor :spectrum_names
 
+    def initialize
+      # Defaults
+      @selected_value = nil
+      @selected_interaval = 0
+    end
+
     def selected_interval
       @interval_textfield.text.to_f
     end
@@ -77,7 +83,7 @@ module Hyperspectral
           Fox::FRAME_SUNKEN | Fox::FRAME_THICK | Fox::TEXTFIELD_REAL |
           Fox::LAYOUT_FILL
       )
-      @interval_textfield.text = 0.to_s
+      @interval_textfield.text = @selected_inteval.to_s
       @interval_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
         if sender.text.size >= 0
           callback(:when_changed_interval_value, sender.text.to_f)
@@ -120,18 +126,7 @@ module Hyperspectral
       draw_image_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
         callback(:when_draw_image_pressed)
       end
-    #
-    #   Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
-    #   Fox::FXButton.new(matrix, "Find peaks", :opts => Fox::LAYOUT_FILL|Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
-    #     run_on_background do
-    #
-    #       # TODO load data from current spectrum
-    #       peaks = PeakDetector.peak_indexes(@spectrum.values)
-    #       keys = @spectrum.keys
-    #       @spectrum_canvas.peaks = peaks.map{|index| keys[index]}
-    #       @spectrum_canvas.update
-    #     end
-    #   end
+
     end
 
     private

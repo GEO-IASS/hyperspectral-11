@@ -10,6 +10,7 @@ require "pp"
 require "fox16"
 require "fox16/colors"
 require "imzml"
+require "matrix"
 
 # load all ruby files from all subdirectories
 Dir.glob("{hyperspectral, core_ext}/**/*.rb", &method(:require))

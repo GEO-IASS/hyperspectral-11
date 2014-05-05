@@ -7,6 +7,9 @@ module Hyperspectral
     # Array of spectrum points where each poin is subarray with just two items
     attr_accessor :points
 
+    # Array used for preview one preprocessing step with current spectrum
+    attr_accessor :preview_points
+
     # Array with selectd points, after change, display it on spectrum canvas
     attr_accessor :selected_points
 
@@ -18,6 +21,7 @@ module Hyperspectral
 
     def mode=(mode)
       @mode = mode
+
       needs_display
     end
 
@@ -31,6 +35,12 @@ module Hyperspectral
       self.zoom_from = self.zoom_to = nil
       self.mode = :single_selection
 
+      needs_display
+    end
+
+    def preview_points=(points)
+      @preview_points = points
+      @spectrum_canvas.preview_points = points
       needs_display
     end
 
