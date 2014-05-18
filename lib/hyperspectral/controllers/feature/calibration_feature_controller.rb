@@ -50,29 +50,21 @@ module Hyperspectral
     # Perform calibration based on selection and input calibration points.
     # Recalculated points are stored in @preview_points
     #
-    # Returns Hash of calibrated values
-    def calibrate
-
-      x_values = Array.new # origin
-      y_values = Array.new # diff
-      self.selected_points.each_with_index do |x, i|
-        origin_item = @table.getItemText(i, @columns.index(COLUMN_ORIGIN))
-        selected_item = @table.getItemText(i, @columns.index(COLUMN_SELECTED))
-        x_values << origin_item.to_f
-        y_values << (origin_item.to_f - selected_item.to_f)
-      end
+    # mz_points - array of mz values
+    # x_values - array of origin values
+    # y_values - array of diff values calculated origin - selected
+    # Returns array of calibrated values
+    def calibrate(mz_points, x_values, y_values)
 
       case @combo_box.text
       when CALIBRATION_TYPE_LINEAR
 
-        array = @points.map { |key, value| [linear_calibration(key, x_values, y_values), value] }
+        array = mz_points.map { |key, value| [linear_calibration(key, x_values, y_values), value] }
         @preview_points = Hash[*array.flatten]
       when CALIBRATION_TYPE_QUADRATIC
         coefs = polynomial(x_values, y_values, 2)
-        array = @points.map { |key, value| [polynomial_value(key, coefs), value]}
-        @preview_points = Hash[*array.flatten]
+        array = mz_points.map { |key, value| [polynomial_value(key, coefs), value]}
       end
-
     end
 
     def load_view(superview)
@@ -98,6 +90,20 @@ module Hyperspectral
       @columns.each_with_index do |col, i|
         table.setColumnText(i, col)
         table.setColumnWidth(i, 80)
+      end
+
+      @calibration_process = Proc.new do |intensity, mz|
+        x_values = Array.new # origin
+        y_values = Array.new # diff
+        self.selected_points.each_with_index do |x, i|
+          origin_item = @table.getItemText(i, @columns.index(COLUMN_ORIGIN))
+          selected_item = @table.getItemText(i, @columns.index(COLUMN_SELECTED))
+          x_values << origin_item.to_f
+          y_values << (origin_item.to_f - selected_item.to_f)
+        end
+
+        mz_calibrated = calibrate(mz, x_values, y_values)
+        [intensity, mz_calibrated]
       end
 
       table.selBackColor = Fox::FXColor::DarkGrey
@@ -171,15 +177,16 @@ module Hyperspectral
         :opts => Fox::LAYOUT_FILL_X | Fox::BUTTON_NORMAL
       )
       preview_button.connect(Fox::SEL_COMMAND) do
-        callback(:when_calibration_preview, calibrate)
+        intensity, mz_calibrated = @calibration_process.call(nil, points)
+        @preview_points = Hash[*mz_calibrated.flatten]
+        callback(:when_calibration_preview, @preview_points)
       end
 
       apply_button = Fox::FXButton.new(vertical_frame, "Apply to All",
         :opts => Fox::LAYOUT_FILL_X | Fox::BUTTON_NORMAL
       )
       apply_button.connect(Fox::SEL_COMMAND) do
-        ## TODO
-        # calibrate
+        callback(:when_apply, @calibration_process)
       end
     end
 
@@ -191,13 +198,10 @@ module Hyperspectral
     def append_row(value = 0.0)
       @table.appendRows
 
-      # init zero column value
-      (@table.numColumns - 1).times do |col|
-        @table.setItemText(@table.numRows - 1, col, 0.to_s)
-      end
-
       # first item set to desired default value
       @table.setItemText(@table.numRows - 1, 0, value.to_s)
+      @table.setItemText(@table.numRows - 1, 1, value.to_s)
+      @table.setItemText(@table.numRows - 1, 2, 0.to_s)
 
       # disable editing of diff column
       @table.disableItem(@table.numRows - 1, @columns.index(COLUMN_DIFF))

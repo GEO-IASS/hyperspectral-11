@@ -109,6 +109,9 @@ module Hyperspectral
       @calibration_controller.when_calibration_preview do |preview_points|
         @spectrum_controller.preview_points = preview_points
       end
+      @calibration_controller.when_apply do |process|
+        @preprocess[:calibration] = process
+      end
 
       # ========
       # = PEAK =
