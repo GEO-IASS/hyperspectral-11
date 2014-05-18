@@ -14,7 +14,7 @@ module Hyperspectral
       show(Fox::PLACEMENT_VISIBLE)
 
       # FIXME debug
-      open_file("/Users/beny/Dropbox/School/dp/imzML/example_files/Example_Continuous.imzML")
+      open_file("/Users/beny/Desktop/imzML/example_files/Example_Continuous.imzML")
     end
 
     def load_view(superview)
@@ -98,11 +98,14 @@ module Hyperspectral
         @spectrum_controller.preview_points = preview_points
       end
 
-      @baseline_controller = BaselineFeatureController.new
-      @baseline_controller.load_view(tab_book)
-
+      # ========
+      # = PEAK =
+      # ========
       @peak_controller = PeakFeatureController.new
       @peak_controller.load_view(tab_book)
+      @peak_controller.when_peaks_found do |peaks|
+        @spectrum_controller.selected_points = peaks
+      end
 
       # ============
       # = SPECTRUM =
@@ -240,15 +243,13 @@ module Hyperspectral
       when SmoothingFeatureController::TITLE
         @smoothing_controller.points = @spectrum_controller.points
         @spectrum_controller.preview_points = @smoothing_controller.preview_points
-      when BaselineFeatureController::TITLE
-        p tab_title
       when CalibrationFeatureController::TITLE
         @spectrum_controller.mode = :multi_selection
         @spectrum_controller.selected_points = @calibration_controller.selected_points
         @calibration_controller.points = @spectrum_controller.points
         @spectrum_controller.preview_points = @calibration_controller.preview_points
       when PeakFeatureController::TITLE
-        p tab_title
+        @peak_controller.points = @spectrum_controller.points
       end
 
     end

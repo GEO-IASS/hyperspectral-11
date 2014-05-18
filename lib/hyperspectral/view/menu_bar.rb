@@ -1,6 +1,6 @@
 module Hyperspectral
 
-  class MenuBar < FXMenuBar
+  class MenuBar < Fox::FXMenuBar
 
     include Callbacks
 
@@ -15,7 +15,8 @@ module Hyperspectral
 
       Fox::FXMenuCommand.new(file_menu, "Open...").connect(Fox::SEL_COMMAND) do
         dialog = Fox::FXFileDialog.new(self, "Open imzML file")
-        dialog.directory = "#{DEFAULT_DIR}"
+        # FIXME debug
+        dialog.directory = "/Users/beny/Desktop/imzML"
         dialog.patternList = ["imzML files (*.imzML)"]
 
         # after success on opening

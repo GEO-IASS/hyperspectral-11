@@ -379,7 +379,7 @@ module Hyperspectral
         self.height - AXIS_PADDING
       )
 
-      text = selected_point.x.round(ROUND_DIGITS).to_s
+      text = selected_point.x.round(3).to_s
       text_width = @font.getTextWidth(text)
       text_height = @font.getTextHeight(text)
       context.drawText(point.x - text_width/2, AXIS_PADDING - 3, text)
