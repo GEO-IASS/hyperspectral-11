@@ -2,9 +2,12 @@ module Hyperspectral
 
   class MainController < Fox::FXMainWindow
 
+    attr_accessor :use_cache
+
     def initialize(app)
       super(app, "imzML Hyperspectral", :width => 800, :height => 600)
       load_view(self)
+      use_cache = false
 
       connect(Fox::SEL_CONFIGURE, method(:window_size_changed))
     end
@@ -76,6 +79,12 @@ module Hyperspectral
       @selection_controller.when_draw_image_pressed do
         show_image
       end
+      @selection_controller.when_reset do
+        @preprocess = Hash.new
+      end
+      @selection_controller.when_cache_changed do |state|
+        @use_cache = state
+      end
 
       # =============
       # = SMOOTHING =
@@ -84,6 +93,9 @@ module Hyperspectral
       @smoothing_controller.load_view(tab_book)
       @smoothing_controller.when_smoothing_applied do |preview_points|
         @spectrum_controller.preview_points = preview_points
+      end
+      @smoothing_controller.when_apply do |process|
+        @preprocess[:smoothing] = process
       end
 
       # ===============
@@ -123,22 +135,26 @@ module Hyperspectral
 
     private
 
-    # view controllers
+    # View controllers
     attr_accessor :spectrum_controller
 
     # models
     attr_accessor :metadata, :average_spectrum
 
-    # views
+    # Views
     attr_accessor :menu_bar, :progress_dialog
 
-    # help variables
+    # Array of preprocessing steps. Each object should be Proc instance which
+    # accepts two params intensity, mz array
+    attr_accessor :preprocess
+
+    # Help variables
     attr_accessor :mutex
 
     def calculate_average_spectrum
       spectrums_count = @metadata.spectrums.size
 
-      p "calculating average for #{spectrums_count} spectrums"
+      # p "calculating average for #{spectrums_count} spectrums"
       @progress_dialog.run(spectrums_count) do |dialog|
         dictionary = Hash.new
         sum = spectrums_count
@@ -146,7 +162,15 @@ module Hyperspectral
         # add all values
         @metadata.spectrums.each do |name, spectrum|
 
-          zipped_array = spectrum.mz_binary.data.zip(spectrum.intensity_binary.data)
+          intensity = spectrum.intensity_binary.data(@use_cache)
+          mz = spectrum.mz_binary.data(@use_cache)
+
+          # apply preprocessing steps
+          @preprocess.each do |key, process|
+            intensity, array = process.call(intensity, mz)
+          end
+
+          zipped_array = mz.zip(intensity)
 
           # create data array
           zipped_array.each do |key_value|
@@ -173,6 +197,7 @@ module Hyperspectral
 
       # reset values
       @average_spectrum = nil
+      @preprocess = Hash.new
 
       self.title = filepath.split("/").last
       @metadata = ImzML::Parser.new(filepath).metadata
@@ -198,6 +223,12 @@ module Hyperspectral
 
       mz = spectrum.mz_binary.data
       intensity = spectrum.intensity_binary.data
+
+      # apply preprocessing steps
+      @preprocess.each do |key, process|
+        intensity, array = process.call(intensity, mz)
+      end
+
       points = mz.zip(intensity).to_h
 
       # show points on spectrum
@@ -219,12 +250,50 @@ module Hyperspectral
         values = Array.new
         # get the specific intensity value
         spectrums.each do |name, spectrum|
-          values << spectrum.intensity(mz_value, interval)
+          values << intensity(spectrum, mz_value, interval)
           dialog.done
         end
 
         @image_controller.create_image(values, image_size.x, image_size.y)
       end
+    end
+
+    def intensity(spectrum, at, interval)
+
+      cached = @use_cache
+
+      # read whole the binary data
+      mz_array = spectrum.mz_binary.data(cached)
+      intensity_array = spectrum.intensity_binary.data(cached)
+
+      # apply preprocessing steps
+      @preprocess.each do |key, process|
+        intensity_array, mz_array = process.call(intensity_array, mz_array)
+      end
+
+      default_from, default_to = mz_array.first, mz_array.first
+
+      from = default_from
+      to = default_to
+
+      # find designated intensity
+      if at
+        from = at - interval
+        from = default_from if from < 0
+        to = at + interval
+        to = default_to if to > mz_array.last
+      end
+
+      # find values in mz array
+      low_value = mz_array.bsearch { |x| x >= from }
+      low_index = mz_array.index(low_value)
+      high_value = mz_array.bsearch { |x| x >= to }
+      high_index = mz_array.index(high_value)
+
+      # sum all values in subarray
+      sum = intensity_array[low_index..high_index].inject{|sum, x| sum + x}
+
+      sum
     end
 
     def tab_changed(sender, selector, event)

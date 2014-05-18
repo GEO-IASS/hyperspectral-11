@@ -127,6 +127,24 @@ module Hyperspectral
         callback(:when_draw_image_pressed)
       end
 
+      # =======================
+      # = Reset preprocessing =
+      # =======================
+      Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
+      draw_image_button = Fox::FXButton.new(matrix, "Reset all preprocessing",
+        :opts => Fox::LAYOUT_FILL | Fox::BUTTON_NORMAL
+      )
+      draw_image_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+        callback(:when_reset)
+      end
+
+      # ====================
+      # = Use memory cache =
+      # ====================
+      @checkbox = Fox::FXCheckButton.new(matrix, "Cache into memory")
+      @checkbox.connect(Fox::SEL_COMMAND) do |sender, selector, event|
+        callback(:when_cache_changed, sender.checkState == Fox::TRUE)
+      end
     end
 
     private

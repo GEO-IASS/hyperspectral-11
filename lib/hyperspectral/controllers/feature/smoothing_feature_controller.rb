@@ -25,6 +25,19 @@ module Hyperspectral
       matrix.numColumns = 5
       matrix.numRows = 2
 
+      # =====================
+      # = Prepare processes =
+      # =====================
+      @process_savitzky_golay = Proc.new do |intensity, mz|
+        smoothed_values = savgol(intensity, @saviztky_golay_size_textfield.text.to_i, SAVITZKY_GOLAY_ORDER)
+        [smoothed_values, mz]
+      end
+
+      @process_moving_average = Proc.new do |intensity, mz|
+         smoothed_values = moving_average(intensity, @moving_average_size_textfield.text.to_i)
+         [smoothed_values, mz]
+      end
+
       # ==================
       # = Moving average =
       # ==================
@@ -53,8 +66,8 @@ module Hyperspectral
         :opts => Fox::LAYOUT_FILL |
           Fox::BUTTON_NORMAL)
       moving_average_preview_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-        smoothed_values = moving_average(@points.values, @moving_average_size_textfield.text.to_i)
-        @preview_points = create_preview_points(smoothed_values)
+        intensity, array = @process_moving_average.call(@points.values, nil)
+        @preview_points = create_preview_points(intensity)
         callback(:when_smoothing_applied, @preview_points)
       end
 
@@ -62,7 +75,7 @@ module Hyperspectral
         :opts => Fox::LAYOUT_FILL |
           Fox::BUTTON_NORMAL)
       moving_average_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-        # TODO impelment
+        callback(:when_apply, @process_moving_average)
       end
 
       # ==================
@@ -94,8 +107,8 @@ module Hyperspectral
         :opts => Fox::LAYOUT_FILL |
           Fox::BUTTON_NORMAL)
       savitzky_golay_preview_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-        smoothed_values = savgol(@points.values, @saviztky_golay_size_textfield.text.to_i, SAVITZKY_GOLAY_ORDER)
-        @preview_points = create_preview_points(smoothed_values)
+        intensity, array = @process_savitzky_golay.call(@points.values, nil)
+        @preview_points = create_preview_points(intensity)
         callback(:when_smoothing_applied, @preview_points)
       end
 
@@ -103,7 +116,7 @@ module Hyperspectral
         :opts => Fox::LAYOUT_FILL |
           Fox::BUTTON_NORMAL)
       savitzky_golay_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-        # TODO impelemnt
+        callback(:when_apply, @process_savitzky_golay)
       end
     end
 
@@ -111,6 +124,9 @@ module Hyperspectral
 
     # Views
     attr_accessor :saviztky_golay_size_textfield, :moving_average_size_textfield
+
+    # Preprocessing processes
+    attr_accessor :process_moving_average, :process_savitzky_golay
 
     def moving_average(array, n = 5)
       # p "Moving averate with #{n}"

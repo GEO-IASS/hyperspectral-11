@@ -49,6 +49,8 @@ module Hyperspectral
 
     # Perform calibration based on selection and input calibration points.
     # Recalculated points are stored in @preview_points
+    #
+    # Returns Hash of calibrated values
     def calibrate
 
       x_values = Array.new # origin
@@ -68,8 +70,6 @@ module Hyperspectral
       when CALIBRATION_TYPE_QUADRATIC
         coefs = polynomial(x_values, y_values, 2)
         array = @points.map { |key, value| [polynomial_value(key, coefs), value]}
-        # FIXME debug
-        p array
         @preview_points = Hash[*array.flatten]
       end
 
