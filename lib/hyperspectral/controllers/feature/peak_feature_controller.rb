@@ -17,6 +17,9 @@ module Hyperspectral
     # Spectrum points
     attr_accessor :points
 
+    # Already found peaks
+    attr_reader :peaks
+
     def load_view(superview)
       item = Fox::FXTabItem.new(superview, TITLE)
       matrix = Fox::FXMatrix.new(superview,
@@ -63,8 +66,18 @@ module Hyperspectral
         :opts => Fox::LAYOUT_FILL |
           Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
             indexes = peak_indexes(@points.values)
-            peaks = indexes.map { |i| @points.keys[i] }
-            callback(:when_peaks_found, peaks)
+            @peaks = indexes.map { |i| @points.keys[i] }
+            callback(:when_peaks_found, @peaks)
+      end
+
+      # =========================
+      # = Import to calibration =
+      # =========================
+      Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
+      Fox::FXButton.new(matrix, "Import found peaks into calibration",
+        :opts => Fox::LAYOUT_FILL |
+          Fox::BUTTON_NORMAL).connect(Fox::SEL_COMMAND) do |sender, sel, event|
+            callback(:when_import_to_calibration, @peaks) if (@peaks)
       end
     end
 

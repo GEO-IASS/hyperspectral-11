@@ -38,6 +38,15 @@ module Hyperspectral
       points
     end
 
+    # Method which add newly selected point at the end of the table
+    #
+    # points - array with new m/z points
+    def add_points(points)
+      points.each do |point|
+        append_row(point.round(3))
+      end
+    end
+
     # Perform calibration based on selection and input calibration points.
     # Recalculated points are stored in @preview_points
     def calibrate
@@ -165,16 +174,35 @@ module Hyperspectral
         callback(:when_calibration_preview, calibrate)
       end
 
-      apply_button = Fox::FXButton.new(vertical_frame, "Apply",
+      apply_button = Fox::FXButton.new(vertical_frame, "Apply to All",
         :opts => Fox::LAYOUT_FILL_X | Fox::BUTTON_NORMAL
       )
       apply_button.connect(Fox::SEL_COMMAND) do
-        ## FIXME
+        ## TODO
         # calibrate
       end
     end
 
     private
+
+    # Method appending new row to the table with default selected value
+    #
+    # value - default value column selected after addition
+    def append_row(value = 0.0)
+      @table.appendRows
+
+      # init zero column value
+      (@table.numColumns - 1).times do |col|
+        @table.setItemText(@table.numRows - 1, col, 0.to_s)
+      end
+
+      # first item set to desired default value
+      @table.setItemText(@table.numRows - 1, 0, value.to_s)
+
+      # disable editing of diff column
+      @table.disableItem(@table.numRows - 1, @columns.index(COLUMN_DIFF))
+      @table.killSelection
+    end
 
     # Detects which row is currently selected in the table
     def selected_row

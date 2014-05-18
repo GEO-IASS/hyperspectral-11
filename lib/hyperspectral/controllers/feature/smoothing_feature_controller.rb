@@ -22,7 +22,7 @@ module Hyperspectral
         :opts => Fox::FRAME_THICK | Fox::FRAME_RAISED | Fox::LAYOUT_FILL_X |
           Fox::MATRIX_BY_COLUMNS
       )
-      matrix.numColumns = 4
+      matrix.numColumns = 5
       matrix.numRows = 2
 
       # ==================
@@ -49,13 +49,20 @@ module Hyperspectral
       end
 
       Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
-      moving_average_button = Fox::FXButton.new(matrix, "Apply",
+      moving_average_preview_button = Fox::FXButton.new(matrix, "Preview",
         :opts => Fox::LAYOUT_FILL |
           Fox::BUTTON_NORMAL)
-      moving_average_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+      moving_average_preview_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
         smoothed_values = moving_average(@points.values, @moving_average_size_textfield.text.to_i)
         @preview_points = create_preview_points(smoothed_values)
         callback(:when_smoothing_applied, @preview_points)
+      end
+
+      moving_average_button = Fox::FXButton.new(matrix, "Apply to All",
+        :opts => Fox::LAYOUT_FILL |
+          Fox::BUTTON_NORMAL)
+      moving_average_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+        # TODO impelment
       end
 
       # ==================
@@ -83,13 +90,20 @@ module Hyperspectral
       end
 
       Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
-      savitzky_golay_button = Fox::FXButton.new(matrix, "Apply",
+      savitzky_golay_preview_button = Fox::FXButton.new(matrix, "Preview",
         :opts => Fox::LAYOUT_FILL |
           Fox::BUTTON_NORMAL)
-      savitzky_golay_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+      savitzky_golay_preview_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
         smoothed_values = savgol(@points.values, @saviztky_golay_size_textfield.text.to_i, SAVITZKY_GOLAY_ORDER)
         @preview_points = create_preview_points(smoothed_values)
         callback(:when_smoothing_applied, @preview_points)
+      end
+
+      savitzky_golay_button = Fox::FXButton.new(matrix, "Apply to All",
+        :opts => Fox::LAYOUT_FILL |
+          Fox::BUTTON_NORMAL)
+      savitzky_golay_button.connect(Fox::SEL_COMMAND) do |sender, sel, event|
+        # TODO impelemnt
       end
     end
 

@@ -77,6 +77,15 @@ module Hyperspectral
         show_image
       end
 
+      # =============
+      # = SMOOTHING =
+      # =============
+      @smoothing_controller = SmoothingFeatureController.new
+      @smoothing_controller.load_view(tab_book)
+      @smoothing_controller.when_smoothing_applied do |preview_points|
+        @spectrum_controller.preview_points = preview_points
+      end
+
       # ===============
       # = CALIBRATION =
       # ===============
@@ -89,15 +98,6 @@ module Hyperspectral
         @spectrum_controller.preview_points = preview_points
       end
 
-      # =============
-      # = SMOOTHING =
-      # =============
-      @smoothing_controller = SmoothingFeatureController.new
-      @smoothing_controller.load_view(tab_book)
-      @smoothing_controller.when_smoothing_applied do |preview_points|
-        @spectrum_controller.preview_points = preview_points
-      end
-
       # ========
       # = PEAK =
       # ========
@@ -105,6 +105,9 @@ module Hyperspectral
       @peak_controller.load_view(tab_book)
       @peak_controller.when_peaks_found do |peaks|
         @spectrum_controller.selected_points = peaks
+      end
+      @peak_controller.when_import_to_calibration do |peaks|
+        @calibration_controller.add_points(peaks)
       end
 
       # ============
@@ -250,6 +253,7 @@ module Hyperspectral
         @spectrum_controller.preview_points = @calibration_controller.preview_points
       when PeakFeatureController::TITLE
         @peak_controller.points = @spectrum_controller.points
+        @spectrum_controller.selected_points = @peak_controller.peaks
       end
 
     end
