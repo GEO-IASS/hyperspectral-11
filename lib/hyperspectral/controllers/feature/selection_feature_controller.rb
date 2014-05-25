@@ -15,6 +15,9 @@ module Hyperspectral
     # Reference for spectrum names to show in tree list box
     attr_accessor :spectrum_names
 
+    # Image drawn intensity range, used for sliders to limit shown intensity
+    attr_accessor :image_intensity_range
+
     def initialize
       # Defaults
       @selected_value = nil
@@ -44,6 +47,27 @@ module Hyperspectral
       end
     end
 
+    def image_intensity_range=(range)
+      @image_intensity_range = range
+      @minimum_slider.enabled = true
+      @maximum_slider.enabled = true
+      @minimum_value_label.text = range.begin.round(SLIDER_RANGE_ROUND).to_s
+      @maximum_value_label.text = range.end.round(SLIDER_RANGE_ROUND).to_s
+    end
+
+    # Calculates selected intensity range to draw
+    #
+    # Returns Range object
+    def selected_intensity_range
+      range = @image_intensity_range
+      step = (range.end - range.begin) / 100
+
+      from = @minimum_slider.value * step + range.begin
+      to = @maximum_slider.value * step + range.begin
+
+      from..to
+    end
+
     def load_view(superview)
 
       item = Fox::FXTabItem.new(superview, TITLE)
@@ -53,6 +77,15 @@ module Hyperspectral
       )
       matrix.numColumns = 2
       matrix.numRows = 4
+
+      # ====================
+      # = Use memory cache =
+      # ====================
+      Fox::FXSeparator.new(matrix, :opts => Fox::SEPARATOR_NONE)
+      @checkbox = Fox::FXCheckButton.new(matrix, "Cache into memory")
+      @checkbox.connect(Fox::SEL_COMMAND) do |sender, selector, event|
+        callback(:when_cache_changed, sender.checkState == Fox::TRUE)
+      end
 
       # ================
       # = MZ textfield =
@@ -138,16 +171,87 @@ module Hyperspectral
         callback(:when_reset)
       end
 
-      # ====================
-      # = Use memory cache =
-      # ====================
-      @checkbox = Fox::FXCheckButton.new(matrix, "Cache into memory")
-      @checkbox.connect(Fox::SEL_COMMAND) do |sender, selector, event|
-        callback(:when_cache_changed, sender.checkState == Fox::TRUE)
+      # ==================
+      # = Minimum slider =
+      # ==================
+      Fox::FXLabel.new(matrix, "Minimum intensity", nil,
+        Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT |
+        Fox::LAYOUT_FILL_ROW
+      )
+      packer = Fox::FXHorizontalFrame.new(matrix,
+        :opts => Fox::LAYOUT_FILL_X | Fox::LAYOUT_FILL_Y | Fox::LAYOUT_BOTTOM |
+        Fox::LAYOUT_RIGHT
+      )
+      @minimum_slider = Fox::FXSlider.new(packer, :opts => Fox::LAYOUT_FILL)
+      @minimum_slider.enabled = false
+      @minimum_slider.value = 0
+      @minimum_value_label = Fox::FXLabel.new(packer, @minimum_slider.value.to_s, nil,
+        Fox::LAYOUT_FIX_WIDTH | Fox::LAYOUT_RIGHT | Fox::JUSTIFY_RIGHT,
+        :width => 50
+      )
+      @minimum_slider.connect(Fox::SEL_COMMAND) do |sender, selector, event|
+        if event > @maximum_slider.value
+          sender.value = @maximum_slider.value
+          minimum_value_text(sender.value)
+        end
+
+        callback(:when_intensity_range_change, selected_intensity_range)
       end
+      @minimum_slider.connect(Fox::SEL_CHANGED) do |sender, selector, event|
+        minimum_value_text(@minimum_slider.value)
+        callback(:when_intensity_range_change, selected_intensity_range)
+      end
+
+      # ==================
+      # = Maximum slider =
+      # ==================
+      Fox::FXLabel.new(matrix, "Maximum intensity", nil,
+        Fox::LAYOUT_CENTER_Y | Fox::LAYOUT_CENTER_X | Fox::JUSTIFY_RIGHT |
+        Fox::LAYOUT_FILL_ROW
+      )
+      packer = Fox::FXHorizontalFrame.new(matrix,
+        :opts => Fox::LAYOUT_FILL_X | Fox::LAYOUT_FILL_Y | Fox::LAYOUT_BOTTOM |
+        Fox::LAYOUT_RIGHT
+      )
+      @maximum_slider = Fox::FXSlider.new(packer, :opts => Fox::LAYOUT_FILL)
+      @maximum_slider.enabled = false
+      @maximum_slider.value = 100
+      @maximum_value_label = Fox::FXLabel.new(packer, @maximum_slider.value.to_s, nil,
+        Fox::LAYOUT_FIX_WIDTH | Fox::LAYOUT_RIGHT | Fox::JUSTIFY_RIGHT,
+        :width => 50
+      )
+      @maximum_slider.connect(Fox::SEL_COMMAND) do |sender, selector, event|
+        if event < @minimum_slider.value
+          sender.value = @minimum_slider.value
+          maximum_value_text(sender.value)
+        end
+
+        callback(:when_intensity_range_change, selected_intensity_range)
+      end
+      @maximum_slider.connect(Fox::SEL_CHANGED) do |sender, selector, event|
+        maximum_value_text(@maximum_slider.value)
+        callback(:when_intensity_range_change, selected_intensity_range)
+      end
+
     end
 
     private
+
+    SLIDER_RANGE_ROUND = 2
+
+    def maximum_value_text(value)
+      range = @image_intensity_range
+      step = (range.end - range.begin) / 100
+      actual_value = value * step + range.begin
+      @maximum_value_label.text = actual_value.round(SLIDER_RANGE_ROUND).to_s;
+    end
+
+    def minimum_value_text(value)
+      range = @image_intensity_range
+      step = (range.end - range.begin) / 100
+      actual_value = value * step + range.begin
+      @minimum_value_label.text = actual_value.round(SLIDER_RANGE_ROUND).to_s;
+    end
 
     # References to the meaningful subviews
     attr_accessor :mz_value_textfield, :interval_textfield

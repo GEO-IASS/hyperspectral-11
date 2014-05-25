@@ -52,7 +52,6 @@ module Hyperspectral
       )
       @moving_average_size_textfield.text = MOVING_AVERAGE_DEFAULT
       @moving_average_size_textfield.connect(Fox::SEL_COMMAND) do |sender, sel, event|
-        # TODO
         window_size = sender.text.to_i
         if window_size < 1 || window_size >= @points.size
           Fox::FXMessageBox.warning(superview, Fox::MBOX_OK, "Input error",
@@ -203,7 +202,6 @@ module Hyperspectral
 
     # Returns an object that will convolve with the padded array
     def weights(half_window, order, deriv=0)
-      # byebug
       mat = Matrix[ *(-half_window..half_window).map {|k| (0..order).map {|i| k**i }} ]
       # Moore-Penrose psuedo-inverse without SVD (not so precize)
       # A' = (A.t * A)^-1 * A.t

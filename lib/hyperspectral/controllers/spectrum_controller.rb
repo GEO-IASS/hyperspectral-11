@@ -114,6 +114,7 @@ module Hyperspectral
       # Find min and max
       x_values = spectrum.keys
       y_values = spectrum.values
+
       @spectrum_canvas.spectrum_min_x, @spectrum_canvas.spectrum_max_x = x_values.min, x_values.max
       @spectrum_canvas.spectrum_min_y, @spectrum_canvas.spectrum_max_y = y_values.min, y_values.max
 

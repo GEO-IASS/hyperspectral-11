@@ -34,10 +34,6 @@ module Hyperspectral
       @font = Fox::FXFont.new(app, "times")
       @font.create
 
-      ## FIXME
-      # default state
-      # @smoothing_window_size = 5
-
       @selected_interval = 0
 
       connect(Fox::SEL_PAINT, method(:draw))
@@ -152,18 +148,6 @@ module Hyperspectral
     # Cache for currently visible points
     attr_accessor :cached_spectrum
 
-    ## FIXME
-    # # Smoothing variables
-    # attr_accessor :smoothing, :smoothing_window_size
-
-    ## FIXME
-    # # Spectrum preview before alternating it's points
-    # attr_accessor :spectrum_preview
-
-    ## FIXME
-    # # Found peaks to draw
-    # attr_accessor :peaks
-
     # Spectrum part drawing method
     #
     # Returns nothing
@@ -200,16 +184,13 @@ module Hyperspectral
           # convert spectrum points and create canvas points
           @spectrum.each do |mz, intensity|
 
-            # FIXME calibration
             point = spectrum_point_to_canvas([mz, intensity])
             points << Fox::FXPoint.new(point.x.to_i, point.y.to_i)
           end
 
-          # FIXME
           # preview points
           @preview_points.each do |mz, intensity|
 
-            # FIXME calibration
             point = spectrum_point_to_canvas([mz, intensity])
             preview_points << Fox::FXPoint.new(point.x.to_i, point.y.to_i)
           end if @preview_points
@@ -261,16 +242,6 @@ module Hyperspectral
         dc.foreground = Fox::FXColor::Blue
         dc.drawLines(preview_points)
 
-        # ====================
-        # = draw found peaks =
-        # ====================
-        ## FIXME
-        # if @peaks
-        #   @peaks.each do |p|
-        #     draw_selected_line(dc, [p, 0], 0, Fox::FXColor::Blue)
-        #   end
-        # end
-
         # ==================
         # = draw zoom rect =
         # ==================
@@ -296,21 +267,6 @@ module Hyperspectral
           spectrum_point = [x, 0]
           draw_selected_line(dc, spectrum_point, @selected_interval, Fox::FXColor::SteelBlue)
         end if @selected_points
-
-        # FIXME smoothing
-        # # draw smoothing preview
-        # if @tabbook.current == TAB_SMOOTHING
-        #   dc.foreground = Fox::FXColor::Blue
-        #   dc.drawLine(0,0, 100, 100)
-        # end
-
-        # FIXME calibration
-        # # draw calibration lines
-        # if @calibration_points.size > 0 && @tabbook.current == TAB_CALIBRATIONS
-        #   @calibration_points.compact.each do |point|
-        #     draw_selected_line(dc, [point, 0], 0, Fox::FXColor::Green)
-        #   end
-        # end
 
         # ==================
         # = position cross =

@@ -4,71 +4,37 @@ module Hyperspectral
 
     include Callbacks
 
-    def clear_image
-      @image_canvas.image = nil
-      @image_canvas.point = nil
-      need_display
+    # Array of origin intensity values
+    attr_accessor :intensity_values
+
+    # Origin image dimension as Array
+    attr_accessor :image_size
+
+    # Image intensity range to trim
+    attr_accessor :intensity_range
+
+    # Scan settings which affects drawing the image
+    attr_accessor :options
+
+    # When assinged data, create image immediately
+    def intensity_values=(data)
+      @intensity_values = data
+      create_image(data)
     end
 
-    def create_image(data, image_width, image_height)
-      @image_size = [image_width, image_height]
-      raise "Image size must be set" if image_height.nil? || image_height.nil?
-
-      # remove nil values
-      data.map!{|x| x.nil? ? 0 : x}
-
-      # normalize value into greyscale
-      max_normalized = data.max - data.min
-      max_normalized = 1 if max_normalized == 0
-      min = data.min
-      step = 255.0 / max_normalized
-      data.map! do |i|
-        value = (step * (i - min)).to_i
-        Fox::FXRGB(value, value, value)
-      end
-
-      # create empty image
-      image = Fox::FXPNGImage.new(Fox::FXApp.instance, nil,
-        :opts => Fox::IMAGE_KEEP | Fox::IMAGE_SHMI | Fox::IMAGE_SHMP,
-        :width => image_width,
-        :height => image_height
-      )
-
-      # rescale image and fill image view
-      scale_w = ImageCanvas::IMAGE_WIDTH
-      scale_h = ImageCanvas::IMAGE_HEIGHT
-      if image.width > image.height
-        scale_h = image.height.to_f/image.width.to_f * ImageCanvas::IMAGE_HEIGHT
-      else
-        scale_w = image.width.to_f/image.height.to_f * ImageCanvas::IMAGE_WIDTH
-      end
-      image.pixels = data
-      image.scale(scale_w, scale_h)
-      @scale_y, @scale_x = (image.width)/image_width.to_f, (image.height)/image_height.to_f
-      image.create
-
-      # # # FIXME debug
-      # Fox::FXFileStream.open("/Users/beny/Desktop/image.png", Fox::FXStreamSave) do |outfile|
-      #   i = Fox::FXPNGImage.new(Fox::FXApp.instance,
-      #     :width => image.width,
-      #     :height => image.height
-      #   )
-      #   i.setPixels(image.pixels)
-      #   i.scale(image_width, image_height)
-      #   i.savePixels(outfile)
-      # end
-
-      # assign image
-      @image_canvas.image = image
-
+    # Getter for image pixels
+    #
+    # Returns array of image pixel data
+    def pixels
+      @image_canvas.image.pixels
     end
 
     def load_view(superview)
 
       packer = Fox::FXPacker.new(superview,
-        :opts => Fox::FRAME_SUNKEN | Fox::LAYOUT_FIX_WIDTH | Fox::LAYOUT_FIX_HEIGHT,
-        :width => ImageCanvas::IMAGE_WIDTH,
-        :height => ImageCanvas::IMAGE_HEIGHT
+      :opts => Fox::FRAME_SUNKEN | Fox::LAYOUT_FIX_WIDTH | Fox::LAYOUT_FIX_HEIGHT,
+      :width => ImageCanvas::IMAGE_WIDTH,
+      :height => ImageCanvas::IMAGE_HEIGHT
       )
       @image_canvas = ImageCanvas.new(packer)
 
@@ -98,6 +64,17 @@ module Hyperspectral
       (point.y/@scale_y).to_i * @image_size.width + (point.x/@scale_x).to_i
     end
 
+    def clear_image
+      @image_canvas.image = nil
+      @image_canvas.point = nil
+      @intensity_range = nil
+      need_display
+    end
+
+    def reload_image
+      create_image(@intensity_values)
+    end
+
     # def spectrum_to_image_point(spectrum)
     #   index = @imzml.spectrums.index(spectrum)
     #
@@ -107,29 +84,68 @@ module Hyperspectral
     #   [x, y]
     # end
 
-    ## FIXME
-    # def image_data(data_path, mz_value, interval)
-    #
-    #   data = Array.new
-    #   @spectrums.each do |spectrum|
-    #     data << spectrum.intensity(data_path, mz_value, interval)
-    #     yield spectrum.id
-    #   end
-    #
-    #   data
-    # end
+    private
+
+    NO_MOUSE = 0
+    LEFT_MOUSE = 1
+    RIGHT_MOUSE = 3
+
+    # Views
+    attr_accessor :image_canvas
+
+    def create_image(data)
+      raise "Image size must be set" unless @image_size
+
+      # if the value is out of range or nil do not include it into data
+      temp_data = data.map do |x|
+        if @intensity_range
+          @intensity_range.include?(x) ? x : @intensity_range.begin
+        else
+          x ||= 0
+        end
+      end
+
+      max = temp_data.max
+      min = temp_data.min
+
+      # normalize value
+      max_normalized = max - min
+      max_normalized = 1 if max_normalized == 0
+      step = 255.0 / max_normalized
+
+      # map to color
+      temp_data.map! do |i|
+        value = (i - min) * step
+
+        value = 0 if value < 0
+        value = 255 if value > 255
+        Fox::FXRGB(value, value, value)
+      end
+
+      # create empty image
+      image = Fox::FXPNGImage.new(Fox::FXApp.instance, nil,
+        :opts => Fox::IMAGE_KEEP | Fox::IMAGE_SHMI | Fox::IMAGE_SHMP,
+        :width => @image_size.width,
+        :height => @image_size.height
+      )
+
+      # rescale image and fill image view
+      scale_w = ImageCanvas::IMAGE_WIDTH
+      scale_h = ImageCanvas::IMAGE_HEIGHT
+      if image.width > image.height
+        scale_h = image.height.to_f/image.width.to_f * ImageCanvas::IMAGE_HEIGHT
+      else
+        scale_w = image.width.to_f/image.height.to_f * ImageCanvas::IMAGE_WIDTH
+      end
+      image.pixels = temp_data
+      image.scale(scale_w, scale_h)
+      @scale_y, @scale_x = (image.width)/@image_size.width.to_f, (image.height)/@image_size.height.to_f
+      image.create
+
+      # assign image
+      @image_canvas.image = image
+
+    end
 
   end
-
-  private
-
-  NO_MOUSE = 0
-  LEFT_MOUSE = 1
-  RIGHT_MOUSE = 3
-
-  # Views
-  attr_accessor :image_canvas
-
-  attr_accessor :image_size
-
 end

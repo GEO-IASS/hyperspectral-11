@@ -9,7 +9,7 @@ module Hyperspectral
     COLUMN_SELECTED = "selected"
     COLUMN_ORIGIN = "origin"
     COLUMN_DIFF = "diff"
-    COLUMN_PEPTID = "peptid"
+    COLUMN_NAME = "name"
 
     CALIBRATION_TYPE_LINEAR = "Linear"
     CALIBRATION_TYPE_QUADRATIC = "Quadratic"
@@ -75,7 +75,7 @@ module Hyperspectral
         :opts => Fox::LAYOUT_FILL_X | Fox::LAYOUT_SIDE_LEFT | Fox::FRAME_RAISED
       )
 
-      @columns = [COLUMN_SELECTED, COLUMN_ORIGIN, COLUMN_DIFF, COLUMN_PEPTID]
+      @columns = [COLUMN_SELECTED, COLUMN_ORIGIN, COLUMN_DIFF, COLUMN_NAME]
       table = Fox::FXTable.new(horizontal_frame,
         :opts => Fox::LAYOUT_FILL_X | Fox::LAYOUT_FILL_Y |
         Fox::TABLE_NO_COLSELECT

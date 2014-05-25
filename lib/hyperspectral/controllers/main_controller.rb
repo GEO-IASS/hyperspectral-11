@@ -5,9 +5,9 @@ module Hyperspectral
     attr_accessor :use_cache
 
     def initialize(app)
-      super(app, "imzML Hyperspectral", :width => 800, :height => 600)
+      super(app, "imzML Hyperspectral", :width => 1000, :height => 800)
       load_view(self)
-      use_cache = false
+      @use_cache = false
 
       connect(Fox::SEL_CONFIGURE, method(:window_size_changed))
     end
@@ -15,9 +15,6 @@ module Hyperspectral
     def create
       super
       show(Fox::PLACEMENT_VISIBLE)
-
-      # FIXME debug
-      open_file("/Users/beny/Desktop/imzML/example_files/Example_Continuous.imzML")
     end
 
     def load_view(superview)
@@ -33,6 +30,18 @@ module Hyperspectral
       @menu_bar = Hyperspectral::MenuBar.new(superview)
       @menu_bar.when_file_opens do |filepath|
         open_file(filepath)
+      end
+      @menu_bar.when_image_save do |filepath|
+
+        image_size = @metadata.scan_settings.values.first.image.max_pixel_count
+        Fox::FXFileStream.open(filepath, Fox::FXStreamSave) do |outfile|
+
+          image = Fox::FXPNGImage.new(Fox::FXApp.instance, :width => image_size.x, :height => image_size.y)
+          image.setPixels(@image_controller.pixels)
+          size = @metadata.scan_settings.first.image.size
+          image.scale(size.x, size.y)
+          image.savePixels(outfile)
+        end
       end
 
       # ==============
@@ -85,6 +94,10 @@ module Hyperspectral
       @selection_controller.when_cache_changed do |state|
         @use_cache = state
       end
+      @selection_controller.when_intensity_range_change do |range|
+        @image_controller.intensity_range = range
+        @image_controller.reload_image
+      end
 
       # =============
       # = SMOOTHING =
@@ -96,6 +109,15 @@ module Hyperspectral
       end
       @smoothing_controller.when_apply do |process|
         @preprocess[:smoothing] = process
+      end
+
+      # =================
+      # = NORMALIZATION =
+      # =================
+      @normalization_controller = NormalizationFeatureController.new
+      @normalization_controller.load_view(tab_book)
+      @normalization_controller.when_apply do |process|
+        @preprocess[:normalization] = process
       end
 
       # ===============
@@ -224,8 +246,8 @@ module Hyperspectral
         spectrum = @metadata.spectrums.values.first
       end
 
-      mz = spectrum.mz_binary.data
-      intensity = spectrum.intensity_binary.data
+      mz = spectrum.mz_binary.data(@use_cache)
+      intensity = spectrum.intensity_binary.data(@use_cache)
 
       # apply preprocessing steps
       @preprocess.each do |key, process|
@@ -250,14 +272,21 @@ module Hyperspectral
       spectrums = @metadata.spectrums
       image_size = @metadata.scan_settings.values.first.image.max_pixel_count
       @progress_dialog.run(spectrums.size) do |dialog|
-        values = Array.new
+        values = Array.new(image_size.x * image_size.y)
         # get the specific intensity value
         spectrums.each do |name, spectrum|
-          values << intensity(spectrum, mz_value, interval)
+          x, y = spectrum.position.x - 1, spectrum.position.y - 1
+          values[y * image_size.x + x] = intensity(spectrum, mz_value, interval)
           dialog.done
         end
 
-        @image_controller.create_image(values, image_size.x, image_size.y)
+        @selection_controller.image_intensity_range = values.min..values.max
+
+        @image_controller.clear_image
+        @image_controller.image_size = [image_size.x, image_size.y]
+        @image_controller.intensity_values = values
+
+        scan_settings = @metadata.scan_settings.first
       end
     end
 
