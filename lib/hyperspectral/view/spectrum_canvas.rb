@@ -1,5 +1,6 @@
 module Hyperspectral
 
+  # Class representing the UI element for drawing the spectrum
   class SpectrumCanvas < Fox::FXCanvas
 
     include Callbacks

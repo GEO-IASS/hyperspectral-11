@@ -1,5 +1,7 @@
 module Hyperspectral
 
+  # Class for handling the spectrum UI and the spectrum operations like
+  # selecting desired points or previewing changes.
   class SpectrumController
 
     include Callbacks
@@ -19,12 +21,20 @@ module Hyperspectral
     # Spectrum mode, can be one of the symbols [:default, :single_selection, :multi_selection]
     attr_accessor :mode
 
+    # Setter for mode which makes the spectrum dirty
+    #
+    # mode - desired mode Symbol
     def mode=(mode)
       @mode = mode
 
       needs_display
     end
 
+    # Setter for displayed spectrum points. After setting the points are copied
+    # to the visible_spectrum to easier zooming ability afterwards. Reset the
+    # default values. Makes spectrum dirty.
+    #
+    # points - Hash of spectrum points
     def points=(points)
       @points = points
 
@@ -38,24 +48,35 @@ module Hyperspectral
       needs_display
     end
 
+    # Setter for preview points which makes spectrum dirty.
+    #
+    # points - Hash of preview points
     def preview_points=(points)
       @preview_points = points
       @spectrum_canvas.preview_points = points
       needs_display
     end
 
+    # Setter for selected points which makes spectrum dirty.
+    #
+    # points - Array of selected points
     def selected_points=(points)
       @selected_points = points
       @spectrum_canvas.selected_points = points
       needs_display
     end
 
+    # Setter for selected interval.
+    #
+    # interval - spectrum selected interval
     def selected_interval=(interval)
       @selected_interval = interval
       @spectrum_canvas.selected_interval = interval
     end
 
-    # Load all views controller by this controller
+    # Load all views controller by this controller.
+    #
+    # superview - parent view
     def load_view(superview)
 
       horizontal_frame = Fox::FXHorizontalFrame.new(superview,
@@ -97,7 +118,7 @@ module Hyperspectral
       needs_display
     end
 
-    # Redraws the views
+    # Redraws the views.
     def needs_display
       @spectrum_canvas.reset_cache
       @spectrum_canvas.update
@@ -126,6 +147,11 @@ module Hyperspectral
       needs_display
     end
 
+    # Method which handles zoom in spectrum.
+    #
+    # sender - object which sends the event
+    # selector - selector used for event
+    # event - event value
     def zoom_in_pressed(sender, selector, event)
       visible_spectrum = @visible_spectrum.to_a
 
@@ -141,6 +167,11 @@ module Hyperspectral
       needs_display
     end
 
+    # Method which handles zoom reset spectrum.
+    #
+    # sender - object which sends the event
+    # selector - selector used for event
+    # event - event value
     def zoom_reset_pressed(sender, selector, event)
       spectrum = @points.to_a
       from = [spectrum.first[0], 0]
@@ -150,6 +181,11 @@ module Hyperspectral
       needs_display
     end
 
+    # Method which handles zoom out spectrum.
+    #
+    # sender - object which sends the event
+    # selector - selector used for event
+    # event - event value
     def zoom_out_pressed(sender, selector, event)
       visible_spectrum = @visible_spectrum.to_a
       spectrum = @points.to_a
@@ -173,6 +209,7 @@ module Hyperspectral
 
     private
 
+    # mouse buttons numbers
     NO_MOUSE = 0
     LEFT_MOUSE = 1
     RIGHT_MOUSE = 3
@@ -183,18 +220,30 @@ module Hyperspectral
     # Mouse events
     attr_accessor :pressed
 
+    # help attributes for zooming
     attr_accessor :zoom_from, :zoom_to
 
+    # Overriden setter for zoom from
+    #
+    # zoom_from - zoom from point
     def zoom_from=(zoom_from)
       @zoom_from = zoom_from
       @spectrum_canvas.zoom_from = zoom_from
     end
 
+    # Overriden setter for zoom to
+    #
+    # zoom_to - zoom to point
     def zoom_to=(zoom_to)
       @zoom_to = zoom_to
       @spectrum_canvas.zoom_to = zoom_to
     end
 
+    # Method called when mouse pressed event occur.
+    #
+    # sender - object which sends the event
+    # selector - selector used for event
+    # event - event value
     def mouse_pressed(sender, selector, event)
       case event.click_button
       when LEFT_MOUSE
@@ -214,6 +263,11 @@ module Hyperspectral
       needs_display
     end
 
+    # Method called when mouse moved event occur
+    #
+    # sender - object which sends the event
+    # selector - selector used for event
+    # event - event value
     def mouse_moved(sender, selector, event)
       return unless event.moved?
       case @pressed
@@ -232,6 +286,11 @@ module Hyperspectral
       needs_display
     end
 
+    # Method called when mouse release event occur
+    #
+    # sender - object which sends the event
+    # selector - selector used for event
+    # event - event value
     def mouse_released(sender, selector, event)
       case event.click_button
       when LEFT_MOUSE

@@ -1,9 +1,11 @@
 module Hyperspectral
 
+  # Class for handling selection tab and the selection itself.
   class SelectionFeatureController
 
     include Callbacks
 
+    # tab title
     TITLE = "Selection"
 
     # Currently selected mz value
@@ -24,15 +26,24 @@ module Hyperspectral
       @selected_interaval = 0
     end
 
+    # Gets the selected interval from textfield.
+    #
+    # Returns String of selected interval from textfield.
     def selected_interval
       @interval_textfield.text.to_f
     end
 
+    # Sets the selected value also in the textfield.
+    #
+    # value - new selected value
     def selected_value=(value)
       @selected_value = value
       @mz_textfield.text = value.to_s
     end
 
+    # Assign spectrum names into the tree list box.
+    #
+    # names - an array of spectrum names
     def spectrum_names=(names)
       @spectrum_names = names
 
@@ -47,6 +58,10 @@ module Hyperspectral
       end
     end
 
+    # Assing the intensity range and sets the correct slider values and
+    # behavior.
+    #
+    # range - new range of intensity
     def image_intensity_range=(range)
       @image_intensity_range = range
       @minimum_slider.enabled = true
@@ -68,6 +83,9 @@ module Hyperspectral
       from..to
     end
 
+    # Loads view.
+    #
+    # superview - parent view
     def load_view(superview)
 
       item = Fox::FXTabItem.new(superview, TITLE)
@@ -237,8 +255,12 @@ module Hyperspectral
 
     private
 
+    # number of digits to round the displayed slider value
     SLIDER_RANGE_ROUND = 2
 
+    # Method which transforms the maximum intensity value in 0..100 range.
+    #
+    # value - selected intensity value
     def maximum_value_text(value)
       range = @image_intensity_range
       step = (range.end - range.begin) / 100
@@ -246,6 +268,9 @@ module Hyperspectral
       @maximum_value_label.text = actual_value.round(SLIDER_RANGE_ROUND).to_s;
     end
 
+    # Method which transforms the minimum intensity value in 0..100 range.
+    #
+    # value - selected intensity value
     def minimum_value_text(value)
       range = @image_intensity_range
       step = (range.end - range.begin) / 100

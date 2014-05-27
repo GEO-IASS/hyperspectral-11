@@ -1,9 +1,13 @@
 module Hyperspectral
 
+  # Main class which handles the main window.
   class MainController < Fox::FXMainWindow
 
     attr_accessor :use_cache
 
+    # Initialize the app itself.
+    #
+    # app - the FXApp instance
     def initialize(app)
       super(app, "imzML Hyperspectral", :width => 800, :height => 600)
       load_view(self)
@@ -12,11 +16,15 @@ module Hyperspectral
       connect(Fox::SEL_CONFIGURE, method(:window_size_changed))
     end
 
+    # Creates the app and show on scren.
     def create
       super
       show(Fox::PLACEMENT_VISIBLE)
     end
 
+    # Load view.
+    #
+    # superview - parent view
     def load_view(superview)
 
       # ===================
@@ -183,6 +191,7 @@ module Hyperspectral
     # Help variables
     attr_accessor :mutex
 
+    # Methods calculating average spectrum from all spectrums.
     def calculate_average_spectrum
       spectrums_count = @metadata.spectrums.size
 
@@ -225,6 +234,9 @@ module Hyperspectral
       end
     end
 
+    # Methods for open file.
+    #
+    # filepath - String with path to the imzML file
     def open_file(filepath)
 
       # reset values
@@ -244,6 +256,10 @@ module Hyperspectral
       @image_controller.clear_image
     end
 
+    # Method for opening specific spectrum.
+    #
+    # name - the name of spectrum to open. If not set the first is chosen
+    #        (default: nil)
     def open_spectrum(name = nil)
       spectrum = nil
       if name
@@ -270,6 +286,7 @@ module Hyperspectral
       @image_controller.show_point(spectrum.position)
     end
 
+    # Method which gets the intensity values for the image.
     def show_image
       mz_value = @selection_controller.selected_value
       interval = @selection_controller.selected_interval
@@ -297,6 +314,11 @@ module Hyperspectral
       end
     end
 
+    # Method used for gathering intensity values at specific point of spectrum.
+    #
+    # spectrum - spectrum used for searching
+    # at - the value of m/z to look for
+    # interval - interval around the "at" value
     def intensity(spectrum, at, interval)
 
       cached = @use_cache
@@ -335,6 +357,11 @@ module Hyperspectral
       sum
     end
 
+    # Method called when tab change event occur.
+    #
+    # sender - sender who send the event
+    # selector - the selector which is used to call this method
+    # event - event value
     def tab_changed(sender, selector, event)
 
       # Reset values
@@ -366,6 +393,11 @@ module Hyperspectral
 
     end
 
+    # Method called when window size changed.
+    #
+    # sender - sender who send the event
+    # selector - the selector which is used to call this method
+    # event - event value
     def window_size_changed(sender, selector, event)
       @spectrum_controller.needs_display
       @image_controller.need_display

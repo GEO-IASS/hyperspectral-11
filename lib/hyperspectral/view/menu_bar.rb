@@ -1,9 +1,13 @@
 module Hyperspectral
 
+  # Class for top menu bar UI
   class MenuBar < Fox::FXMenuBar
 
     include Callbacks
 
+    # Initialize of the menu
+    #
+    # window - windows which will show the menu
     def initialize(window)
       super(window, Fox::LAYOUT_SIDE_TOP | Fox::LAYOUT_FILL_X)
 

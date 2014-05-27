@@ -3,23 +3,30 @@ require "rinruby"
 
 module Hyperspectral
 
+  # Class for handling peak tab and peak finding algorithm itself
   class PeakFeatureController
 
     include Callbacks
 
+    # disabling the debug mode of RinRuby
     DEBUG_R = false
 
+    # default values for searching algorithm
     DEFAULT_SCALES_TOP = 64
     DEFAULT_SNRATIO = 10
 
+    # tab title
     TITLE = "Peak"
 
-    # Spectrum points
+    # spectrum points
     attr_accessor :points
 
-    # Already found peaks
+    # already found peaks
     attr_reader :peaks
 
+    # Loads view
+    #
+    # superview - parent view
     def load_view(superview)
       item = Fox::FXTabItem.new(superview, TITLE)
       matrix = Fox::FXMatrix.new(superview,
@@ -81,6 +88,11 @@ module Hyperspectral
       end
     end
 
+    # Look for peaks in the spectrum.
+    #
+    # spectrum - spectrum which is searched for peaks
+    # echo_debug - if the R debug should be shown (default: DEBUG_R)
+    # Returns an array of found peaks
     def peak_indexes(spectrum, echo_debug = DEBUG_R)
 
       @interpret = RinRuby.new(echo_debug)

@@ -15,6 +15,7 @@ require "hyperspectral/callbacks"
 # load all ruby files from all subdirectories
 Dir.glob("{hyperspectral, core_ext}/**/*.rb", &method(:require))
 
+# run the app
 if __FILE__ == $0
   Fox::FXApp.new do |app|
     Hyperspectral::MainController.new(app)

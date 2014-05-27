@@ -1,12 +1,16 @@
 module Hyperspectral
 
+  # Class for handling the normalization tab and the normalization itself
   class NormalizationFeatureController
 
     include Callbacks
 
+    # tab title
     TITLE = "Normalization"
 
-
+    # Loads view.
+    #
+    # superview - parent view
     def load_view(superview)
       item = Fox::FXTabItem.new(superview, TITLE)
       matrix = Fox::FXMatrix.new(superview,
@@ -76,6 +80,7 @@ module Hyperspectral
         f = median unless median == 0
       end
 
+      # use normalization for each intensity value
       intensities.map do |intensity|
         (1/f.to_f) * intensity
       end

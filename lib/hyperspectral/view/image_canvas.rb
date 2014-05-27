@@ -1,7 +1,9 @@
 module Hyperspectral
 
+  # Class representing the UI part which draws the image itself.
   class ImageCanvas < Fox::FXCanvas
 
+    # fix dimensions of image
     IMAGE_WIDTH = 300
     IMAGE_HEIGHT = 300
 
@@ -11,11 +13,17 @@ module Hyperspectral
     # Selected point, an instance of Array [x, y]
     attr_accessor :point
 
+    # Setter override which just makes image dirty.
+    #
+    # point - selected point
     def point=(point)
       @point = point
       self.update
     end
 
+    # Initialize the view
+    #
+    # superview - parent view
     def initialize(superview)
       super(superview,
         :opts =>
@@ -29,11 +37,19 @@ module Hyperspectral
 
     end
 
+    # Overriden setter for image itself which makes image dirty.
+    #
+    # image - the image
     def image=(image)
       @image = image
       self.update
     end
 
+    # Custom image drawing method
+    #
+    # sender - object which sends the event
+    # selector - selector used for event
+    # event - event value
     def draw(sender, selector, event)
       return unless sender && selector && event
 

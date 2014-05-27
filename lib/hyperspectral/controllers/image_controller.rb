@@ -1,5 +1,6 @@
 module Hyperspectral
 
+  # Class handling the image part of the UI and image operations
   class ImageController
 
     include Callbacks
@@ -29,6 +30,9 @@ module Hyperspectral
       @image_canvas.image.pixels
     end
 
+    # Load view
+    #
+    # superview - parent view
     def load_view(superview)
 
       packer = Fox::FXPacker.new(superview,
@@ -42,6 +46,11 @@ module Hyperspectral
 
     end
 
+    # Method called when mouse is pressed.
+    #
+    # sender - sender who send the event
+    # selector - the selector which is used to call this method
+    # event - event value
     def mouse_pressed(sender, selector, event)
       case event.click_button
       when LEFT_MOUSE
@@ -51,19 +60,28 @@ module Hyperspectral
       end
     end
 
+    # Methods which marks image as a dirty for redraw.
     def need_display
       @image_canvas.update
     end
 
+    # Method which shows cross in the image.
+    #
+    # point - which point to mark
     def show_point(point)
       return unless @scale_x && @scale_y
       @image_canvas.point = [point.x * @scale_x - @scale_x/2, point.y * @scale_y - @scale_y/2]
     end
 
+    # Transformation from image plane to the spectrum index.
+    #
+    # point - image point coordinates
+    # Returns spectrum index value.
     def image_point_to_spectrum_index(point)
       (point.y/@scale_y).to_i * @image_size.width + (point.x/@scale_x).to_i
     end
 
+    # Resets the image canvas and other attributes.
     def clear_image
       @image_canvas.image = nil
       @image_canvas.point = nil
@@ -71,6 +89,7 @@ module Hyperspectral
       need_display
     end
 
+    # Recreate image from saved values.
     def reload_image
       create_image(@intensity_values)
     end
@@ -86,6 +105,7 @@ module Hyperspectral
 
     private
 
+    # mouse button indexes
     NO_MOUSE = 0
     LEFT_MOUSE = 1
     RIGHT_MOUSE = 3
@@ -93,6 +113,9 @@ module Hyperspectral
     # Views
     attr_accessor :image_canvas
 
+    # Create an image from input data.
+    #
+    # data - an array of intensity values
     def create_image(data)
       raise "Image size must be set" unless @image_size
 

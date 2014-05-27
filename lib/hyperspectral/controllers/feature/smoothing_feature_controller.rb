@@ -1,11 +1,14 @@
 module Hyperspectral
 
+  # Class handling the smoothing tab and smoothing operations.
   class SmoothingFeatureController
 
     include Callbacks
 
+    # tab title
     TITLE = "Smoothing"
 
+    # smoothing default values
     MOVING_AVERAGE_DEFAULT = "5"
     SAVITZKY_GOLAY_DEFAULT = "5"
     SAVITZKY_GOLAY_ORDER = 3
@@ -16,6 +19,9 @@ module Hyperspectral
     # Points for "before" smoothing preview
     attr_accessor :preview_points
 
+    # Load view.
+    #
+    # superview - parent view
     def load_view(superview)
       item = Fox::FXTabItem.new(superview, TITLE)
       matrix = Fox::FXMatrix.new(superview,
@@ -127,6 +133,11 @@ module Hyperspectral
     # Preprocessing processes
     attr_accessor :process_moving_average, :process_savitzky_golay
 
+    # Calculates the moving average.
+    #
+    # array - input array on which the moving average is calculated
+    # n - size of the window
+    # Returns filtered array.
     def moving_average(array, n = 5)
       # p "Moving averate with #{n}"
 
@@ -210,6 +221,10 @@ module Hyperspectral
       pinv.row(deriv).to_a
     end
 
+    # Creates preview points for spectrum canvas.
+    #
+    # values - recalulcated values in array.
+    # Return Hash of preview points transformed from the array.
     def create_preview_points(values)
       Hash[*@points.keys.zip(values).flatten]
     end

@@ -1,16 +1,20 @@
 module Hyperspectral
 
+  # Class for handling the calibration tab and the calibration itself.
   class CalibrationFeatureController
 
     include Callbacks
 
+    # Tab title
     TITLE = "Calibration"
 
+    # Columns titles
     COLUMN_SELECTED = "selected"
     COLUMN_ORIGIN = "origin"
     COLUMN_DIFF = "diff"
     COLUMN_NAME = "name"
 
+    # Calibration types names
     CALIBRATION_TYPE_LINEAR = "Linear"
     CALIBRATION_TYPE_QUADRATIC = "Quadratic"
 
@@ -67,6 +71,9 @@ module Hyperspectral
       end
     end
 
+    # Load views.
+    #
+    # superview - parent view
     def load_view(superview)
       item = Fox::FXTabItem.new(superview, TITLE)
 
@@ -192,7 +199,7 @@ module Hyperspectral
 
     private
 
-    # Method appending new row to the table with default selected value
+    # Method appending new row to the table with default selected value.
     #
     # value - default value column selected after addition
     def append_row(value = 0.0)
@@ -208,7 +215,9 @@ module Hyperspectral
       @table.killSelection
     end
 
-    # Detects which row is currently selected in the table
+    # Detects which row is currently selected in the table.
+    #
+    # Returns selected row.
     def selected_row
 
       row_selected = nil
@@ -223,7 +232,7 @@ module Hyperspectral
       row_selected
     end
 
-    # Recalculation of the table rows, used after any change
+    # Recalculation of the table rows, used after any change.
     #
     # row - number of row to recalculate
     def recalculate_table_row(row)
