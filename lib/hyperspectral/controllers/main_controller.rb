@@ -5,7 +5,7 @@ module Hyperspectral
     attr_accessor :use_cache
 
     def initialize(app)
-      super(app, "imzML Hyperspectral", :width => 1000, :height => 800)
+      super(app, "imzML Hyperspectral", :width => 800, :height => 600)
       load_view(self)
       @use_cache = false
 
@@ -36,7 +36,10 @@ module Hyperspectral
         image_size = @metadata.scan_settings.values.first.image.max_pixel_count
         Fox::FXFileStream.open(filepath, Fox::FXStreamSave) do |outfile|
 
-          image = Fox::FXPNGImage.new(Fox::FXApp.instance, :width => image_size.x, :height => image_size.y)
+          image = Fox::FXPNGImage.new(
+            Fox::FXApp.instance,
+            :width => image_size.x,
+            :height => image_size.y)
           image.setPixels(@image_controller.pixels)
           size = @metadata.scan_settings.first.image.size
           image.scale(size.x, size.y)
@@ -47,8 +50,12 @@ module Hyperspectral
       # ==============
       # = MAIN FRAME =
       # ==============
-      vertical_frame = Fox::FXVerticalFrame.new(superview, :opts => Fox::LAYOUT_FILL)
-      top_frame = Fox::FXHorizontalFrame.new(vertical_frame, :opts => Fox::LAYOUT_FILL_X)
+      vertical_frame = Fox::FXVerticalFrame.new(
+        superview,
+        :opts => Fox::LAYOUT_FILL)
+      top_frame = Fox::FXHorizontalFrame.new(
+        vertical_frame,
+        :opts => Fox::LAYOUT_FILL_X)
 
       # =========
       # = IMAGE =

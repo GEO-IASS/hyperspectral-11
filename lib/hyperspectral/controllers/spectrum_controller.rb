@@ -104,7 +104,7 @@ module Hyperspectral
     end
 
     # Sets the current visible spectrum and calulates the Y and X minimum and
-    # maximum values
+    # maximum values.
     #
     # spectrum - the visible part of the spectrum
     def visible_spectrum=(spectrum)
@@ -115,8 +115,11 @@ module Hyperspectral
       x_values = spectrum.keys
       y_values = spectrum.values
 
-      @spectrum_canvas.spectrum_min_x, @spectrum_canvas.spectrum_max_x = x_values.min, x_values.max
-      @spectrum_canvas.spectrum_min_y, @spectrum_canvas.spectrum_max_y = y_values.min, y_values.max
+      # assign min/max values
+      @spectrum_canvas.spectrum_min_x = x_values.min
+      @spectrum_canvas.spectrum_max_x = x_values.max
+      @spectrum_canvas.spectrum_min_y = y_values.min
+      @spectrum_canvas.spectrum_max_y = y_values.max
 
       @spectrum_canvas.spectrum = @visible_spectrum
 

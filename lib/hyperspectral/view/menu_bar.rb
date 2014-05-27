@@ -23,25 +23,25 @@ module Hyperspectral
         end
       end
 
-      Fox::FXMenuSeparator.new(file_menu)
-
-      Fox::FXMenuCommand.new(file_menu, "Save image...").connect(Fox::SEL_COMMAND) do
-        saveDialog = Fox::FXFileDialog.new(self, "Save as PNG")
-        saveDialog.patternList = ["PNG files (*.png)"]
-        if saveDialog.execute != 0
-          callback(:when_image_save, saveDialog.filename)
-        end
-      end
-
-      Fox::FXMenuCommand.new(file_menu, "Save spectrum ...").connect(Fox::SEL_COMMAND) do
-        saveDialog = Fox::FXFileDialog.new(self, "Save as CSV")
-        saveDialog.patternList = ["CSV files (*.csv)"]
-        if @spectrum
-          if saveDialog.execute != 0
-            callback(:when_spectrum_save, saveDialog.filename)
-          end
-        end
-      end
+      # Fox::FXMenuSeparator.new(file_menu)
+      #
+      # Fox::FXMenuCommand.new(file_menu, "Save image...").connect(Fox::SEL_COMMAND) do
+      #   saveDialog = Fox::FXFileDialog.new(self, "Save as PNG")
+      #   saveDialog.patternList = ["PNG files (*.png)"]
+      #   if saveDialog.execute != 0
+      #     callback(:when_image_save, saveDialog.filename)
+      #   end
+      # end
+      #
+      # Fox::FXMenuCommand.new(file_menu, "Save spectrum ...").connect(Fox::SEL_COMMAND) do
+      #   saveDialog = Fox::FXFileDialog.new(self, "Save as CSV")
+      #   saveDialog.patternList = ["CSV files (*.csv)"]
+      #   if @spectrum
+      #     if saveDialog.execute != 0
+      #       callback(:when_spectrum_save, saveDialog.filename)
+      #     end
+      #   end
+      # end
 
       Fox::FXMenuSeparator.new(file_menu)
 
